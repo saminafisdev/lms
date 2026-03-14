@@ -35,7 +35,7 @@ class Course(models.Model):
     price = models.DecimalField(
         max_digits=10, decimal_places=2, help_text="Price in USD"
     )
-    duration = models.PositiveIntegerField(help_text="Number of weeks")
+    duration = models.PositiveSmallIntegerField(help_text="Number of weeks")
     hours_per_session = models.DecimalField(max_digits=5, decimal_places=2)
     level = models.CharField(max_length=15, choices=LEVEL_CHOICES, default="beginner")
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default="upcoming")
