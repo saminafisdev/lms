@@ -60,30 +60,60 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
 
 class ModuleViewSet(viewsets.ModelViewSet):
-    queryset = Module.objects.select_related("course").all()
     serializer_class = ModuleSerializer
+
+    def get_queryset(self):
+        queryset = Module.objects.select_related("course").all()
+        if "course_pk" in self.kwargs:
+            queryset = queryset.filter(course_id=self.kwargs["course_pk"])
+        return queryset
 
 
 class LessonViewSet(viewsets.ModelViewSet):
-    queryset = Lesson.objects.select_related("module", "module__course").all()
     serializer_class = LessonSerializer
+
+    def get_queryset(self):
+        queryset = Lesson.objects.select_related("module", "module__course").all()
+        if "module_pk" in self.kwargs:
+            queryset = queryset.filter(module_id=self.kwargs["module_pk"])
+        return queryset
 
 
 class QuizViewSet(viewsets.ModelViewSet):
-    queryset = Quiz.objects.select_related("lesson").all()
     serializer_class = QuizSerializer
+
+    def get_queryset(self):
+        queryset = Quiz.objects.select_related("lesson").all()
+        if "lesson_pk" in self.kwargs:
+            queryset = queryset.filter(lesson_id=self.kwargs["lesson_pk"])
+        return queryset
 
 
 class QuestionViewSet(viewsets.ModelViewSet):
-    queryset = Question.objects.select_related("quiz").all()
     serializer_class = QuestionSerializer
+
+    def get_queryset(self):
+        queryset = Question.objects.select_related("quiz").all()
+        if "quiz_pk" in self.kwargs:
+            queryset = queryset.filter(quiz_id=self.kwargs["quiz_pk"])
+        return queryset
 
 
 class OptionViewSet(viewsets.ModelViewSet):
-    queryset = Option.objects.select_related("question").all()
     serializer_class = OptionSerializer
+
+    def get_queryset(self):
+        queryset = Option.objects.select_related("question").all()
+        if "question_pk" in self.kwargs:
+            queryset = queryset.filter(question_id=self.kwargs["question_pk"])
+        return queryset
 
 
 class AssignmentViewSet(viewsets.ModelViewSet):
-    queryset = Assignment.objects.select_related("lesson").all()
     serializer_class = AssignmentSerializer
+
+    def get_queryset(self):
+        queryset = Assignment.objects.select_related("lesson").all()
+        if "lesson_pk" in self.kwargs:
+            queryset = queryset.filter(lesson_id=self.kwargs["lesson_pk"])
+        return queryset
