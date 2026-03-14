@@ -39,6 +39,9 @@ class CourseFilter(django_filters.FilterSet):
 class CourseViewSet(viewsets.ModelViewSet):
     queryset = Course.objects.select_related(
         "category", "teacher", "teacher__user"
+    ).prefetch_related(
+        "modules__lessons__quiz_details__questions__options",
+        "modules__lessons__assignment_details",
     ).all()
     serializer_class = CourseSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]

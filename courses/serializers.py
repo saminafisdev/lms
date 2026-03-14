@@ -20,44 +20,9 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class CourseSerializer(serializers.ModelSerializer):
-    category = CategorySerializer(read_only=True)
-    teacher = TeacherProfileSerializer(read_only=True)
-    category_id = serializers.PrimaryKeyRelatedField(
-        queryset=Category.objects.all(),
-        source="category",
-        write_only=True,
-        required=False,
-        allow_null=True,
-    )
-    teacher_id = serializers.PrimaryKeyRelatedField(
-        queryset=TeacherProfile.objects.select_related("user").all(),
-        source="teacher",
-        write_only=True,
-        required=False,
-        allow_null=True,
-    )
-
-    class Meta:
-        model = Course
-        fields = "__all__"
-
-
 class ScholarshipSerializer(serializers.ModelSerializer):
     class Meta:
         model = Scholarship
-        fields = "__all__"
-
-
-class ModuleSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Module
-        fields = "__all__"
-
-
-class LessonSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Lesson
         fields = "__all__"
 
 
@@ -86,4 +51,45 @@ class QuizSerializer(serializers.ModelSerializer):
 class AssignmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Assignment
+        fields = "__all__"
+
+
+class LessonSerializer(serializers.ModelSerializer):
+    quiz_details = QuizSerializer(read_only=True)
+    assignment_details = AssignmentSerializer(read_only=True)
+
+    class Meta:
+        model = Lesson
+        fields = "__all__"
+
+
+class ModuleSerializer(serializers.ModelSerializer):
+    lessons = LessonSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Module
+        fields = "__all__"
+
+
+class CourseSerializer(serializers.ModelSerializer):
+    category = CategorySerializer(read_only=True)
+    teacher = TeacherProfileSerializer(read_only=True)
+    modules = ModuleSerializer(many=True, read_only=True)
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(),
+        source="category",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+    teacher_id = serializers.PrimaryKeyRelatedField(
+        queryset=TeacherProfile.objects.select_related("user").all(),
+        source="teacher",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = Course
         fields = "__all__"
