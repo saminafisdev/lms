@@ -30,6 +30,7 @@ class OptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Option
         fields = "__all__"
+        extra_kwargs = {"question": {"required": False}}
 
 
 class QuestionSerializer(serializers.ModelSerializer):
@@ -38,6 +39,7 @@ class QuestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
         fields = "__all__"
+        extra_kwargs = {"quiz": {"required": False}}
 
 
 class QuizSerializer(serializers.ModelSerializer):
@@ -46,12 +48,14 @@ class QuizSerializer(serializers.ModelSerializer):
     class Meta:
         model = Quiz
         fields = "__all__"
+        extra_kwargs = {"lesson": {"required": False}}
 
 
 class AssignmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Assignment
         fields = "__all__"
+        extra_kwargs = {"lesson": {"required": False}}
 
 
 class LessonSerializer(serializers.ModelSerializer):
@@ -61,6 +65,7 @@ class LessonSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lesson
         fields = "__all__"
+        extra_kwargs = {"module": {"required": False}}
 
 
 class ModuleSerializer(serializers.ModelSerializer):
@@ -69,6 +74,7 @@ class ModuleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Module
         fields = "__all__"
+        extra_kwargs = {"course": {"required": False}}
 
 
 class CourseSerializer(serializers.ModelSerializer):

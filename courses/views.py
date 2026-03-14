@@ -37,12 +37,14 @@ class CourseFilter(django_filters.FilterSet):
 
 
 class CourseViewSet(viewsets.ModelViewSet):
-    queryset = Course.objects.select_related(
-        "category", "teacher", "teacher__user"
-    ).prefetch_related(
-        "modules__lessons__quiz_details__questions__options",
-        "modules__lessons__assignment_details",
-    ).all()
+    queryset = (
+        Course.objects.select_related("category", "teacher", "teacher__user")
+        .prefetch_related(
+            "modules__lessons__quiz_details__questions__options",
+            "modules__lessons__assignment_details",
+        )
+        .all()
+    )
     serializer_class = CourseSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_class = CourseFilter
@@ -68,6 +70,12 @@ class ModuleViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(course_id=self.kwargs["course_pk"])
         return queryset
 
+    def perform_create(self, serializer):
+        if "course_pk" in self.kwargs:
+            serializer.save(course_id=self.kwargs["course_pk"])
+        else:
+            serializer.save()
+
 
 class LessonViewSet(viewsets.ModelViewSet):
     serializer_class = LessonSerializer
@@ -77,6 +85,12 @@ class LessonViewSet(viewsets.ModelViewSet):
         if "module_pk" in self.kwargs:
             queryset = queryset.filter(module_id=self.kwargs["module_pk"])
         return queryset
+
+    def perform_create(self, serializer):
+        if "module_pk" in self.kwargs:
+            serializer.save(module_id=self.kwargs["module_pk"])
+        else:
+            serializer.save()
 
 
 class QuizViewSet(viewsets.ModelViewSet):
@@ -88,6 +102,12 @@ class QuizViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(lesson_id=self.kwargs["lesson_pk"])
         return queryset
 
+    def perform_create(self, serializer):
+        if "lesson_pk" in self.kwargs:
+            serializer.save(lesson_id=self.kwargs["lesson_pk"])
+        else:
+            serializer.save()
+
 
 class QuestionViewSet(viewsets.ModelViewSet):
     serializer_class = QuestionSerializer
@@ -97,6 +117,12 @@ class QuestionViewSet(viewsets.ModelViewSet):
         if "quiz_pk" in self.kwargs:
             queryset = queryset.filter(quiz_id=self.kwargs["quiz_pk"])
         return queryset
+
+    def perform_create(self, serializer):
+        if "quiz_pk" in self.kwargs:
+            serializer.save(quiz_id=self.kwargs["quiz_pk"])
+        else:
+            serializer.save()
 
 
 class OptionViewSet(viewsets.ModelViewSet):
@@ -108,6 +134,12 @@ class OptionViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(question_id=self.kwargs["question_pk"])
         return queryset
 
+    def perform_create(self, serializer):
+        if "question_pk" in self.kwargs:
+            serializer.save(question_id=self.kwargs["question_pk"])
+        else:
+            serializer.save()
+
 
 class AssignmentViewSet(viewsets.ModelViewSet):
     serializer_class = AssignmentSerializer
@@ -117,3 +149,9 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         if "lesson_pk" in self.kwargs:
             queryset = queryset.filter(lesson_id=self.kwargs["lesson_pk"])
         return queryset
+
+    def perform_create(self, serializer):
+        if "lesson_pk" in self.kwargs:
+            serializer.save(lesson_id=self.kwargs["lesson_pk"])
+        else:
+            serializer.save()
