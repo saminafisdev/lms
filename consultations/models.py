@@ -1,21 +1,39 @@
 from django.db import models
+from django.contrib.auth import get_user_model
 from accounts.models import TeacherProfile
+
+User = get_user_model()
 
 
 class Consultation(models.Model):
     teacher = models.ForeignKey(
         TeacherProfile, on_delete=models.CASCADE, related_name="consultations"
     )
-    day = models.DateField()
-    start_time = models.TimeField()
-    end_time = models.TimeField()
-    zoom_link = models.URLField(
-        blank=True, null=True, help_text="Zoom integration link"
+    title = models.CharField(max_length=255, default="General Consultation")
+    description = models.TextField(blank=True, null=True)
+    standard_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0.00,
+        help_text="Standard price per session",
     )
 
     def __str__(self):
+        return f"{self.title} by {self.teacher.user.email}"
+
+
+class AvailableTimeslot(models.Model):
+    consultation = models.ForeignKey(
+        Consultation, on_delete=models.CASCADE, related_name="timeslots"
+    )
+    day = models.DateField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    is_booked = models.BooleanField(default=False)
+
+    def __str__(self):
         return (
-            f"{self.teacher.user.email} - {self.day} {self.start_time}-{self.end_time}"
+            f"{self.consultation.title} - {self.day} {self.start_time}-{self.end_time}"
         )
 
     class Meta:
@@ -23,19 +41,39 @@ class Consultation(models.Model):
 
 
 class Bundle(models.Model):
-    teacher = models.ForeignKey(
-        TeacherProfile, on_delete=models.CASCADE, related_name="consultation_bundles"
+    consultation = models.ForeignKey(
+        Consultation, on_delete=models.CASCADE, related_name="bundles"
     )
     num_sessions = models.PositiveIntegerField(
-        help_text="Number of sessions in the bundle"
+        help_text="The number of sessions a student must purchase to receive a discount"
     )
-    original_hourly_rate = models.DecimalField(max_digits=10, decimal_places=2)
     discount_percentage = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        help_text="Discount percentage (e.g., 10.00 for 10%)",
+        help_text="Discount percentage applied when conditions are met",
     )
-    final_hourly_rate = models.DecimalField(max_digits=10, decimal_places=2)
 
     def __str__(self):
-        return f"Bundle: {self.num_sessions} sessions with {self.teacher.user.email}"
+        return f"Bundle: {self.num_sessions} sessions for {self.consultation.title}"
+
+
+class ConsultationPurchase(models.Model):
+    student = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="consultation_purchases"
+    )
+    consultation = models.ForeignKey(Consultation, on_delete=models.CASCADE)
+    bundle_applied = models.ForeignKey(
+        Bundle, null=True, blank=True, on_delete=models.SET_NULL
+    )
+
+    # Financials
+    total_price_paid = models.DecimalField(max_digits=10, decimal_places=2)
+    sessions_purchased = models.PositiveIntegerField()
+
+    # The literal times selected
+    booked_slots = models.ManyToManyField(AvailableTimeslot, related_name="purchases")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Purchase by {self.student.email} for {self.consultation.title}"
