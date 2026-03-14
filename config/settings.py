@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -37,7 +38,14 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "rest_framework",
+    "djoser",
+    "django_filters",
+    "rest_framework_simplejwt",
+    "drf_spectacular",
     "accounts",
+    "courses",
+    "consultations",
 ]
 
 MIDDLEWARE = [
@@ -118,3 +126,35 @@ USE_TZ = True
 STATIC_URL = "static/"
 
 AUTH_USER_MODEL = "accounts.User"
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "AUTH_HEADER_TYPES": ("JWT",),
+}
+
+DJOSER = {
+    "LOGIN_FIELD": "email",
+    "USER_CREATE_PASSWORD_RETYPE": True,
+    "SEND_ACTIVATION_EMAIL": False,
+    "SERIALIZERS": {
+        "user_create": "accounts.serializers.CustomUserCreateSerializer",
+        "user_create_password_retype": "accounts.serializers.CustomUserCreatePasswordRetypeSerializer",
+        "current_user": "accounts.serializers.CustomUserSerializer",
+        "user": "accounts.serializers.CustomUserSerializer",
+    },
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Zahra LMS API",
+    "DESCRIPTION": "API documentation for Zahra LMS",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+}
