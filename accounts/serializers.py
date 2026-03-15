@@ -18,6 +18,12 @@ class TeacherProfileSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class TeacherProfileCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TeacherProfile
+        exclude = ("user",)
+
+
 class StudentProfileSerializer(serializers.ModelSerializer):
     user_email = serializers.ReadOnlyField(source="user.email")
 
@@ -26,9 +32,15 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class StudentProfileCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudentProfile
+        exclude = ("user",)
+
+
 class CustomUserCreateSerializer(UserCreateSerializer):
-    teacher_profile = TeacherProfileSerializer(required=False)
-    student_profile = StudentProfileSerializer(required=False)
+    teacher_profile = TeacherProfileCreateSerializer(required=False)
+    student_profile = StudentProfileCreateSerializer(required=False)
 
     class Meta(UserCreateSerializer.Meta):
         model = User
@@ -65,8 +77,8 @@ class CustomUserCreateSerializer(UserCreateSerializer):
 
 
 class CustomUserCreatePasswordRetypeSerializer(UserCreatePasswordRetypeSerializer):
-    teacher_profile = TeacherProfileSerializer(required=False)
-    student_profile = StudentProfileSerializer(required=False)
+    teacher_profile = TeacherProfileCreateSerializer(required=False)
+    student_profile = StudentProfileCreateSerializer(required=False)
 
     class Meta(UserCreatePasswordRetypeSerializer.Meta):
         model = User
