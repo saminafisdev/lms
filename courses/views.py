@@ -1,5 +1,6 @@
 from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Prefetch
 import django_filters
 from accounts.models import TeacherProfile
 from .models import (
@@ -40,6 +41,8 @@ class CourseViewSet(viewsets.ModelViewSet):
     queryset = (
         Course.objects.select_related("category", "teacher", "teacher__user")
         .prefetch_related(
+            Prefetch("modules", queryset=Module.objects.order_by("order")),
+            Prefetch("modules__lessons", queryset=Lesson.objects.order_by("order")),
             "modules__lessons__quiz_details__questions__options",
             "modules__lessons__assignment_details",
         )
@@ -65,7 +68,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
     serializer_class = ModuleSerializer
 
     def get_queryset(self):
-        queryset = Module.objects.select_related("course").all()
+        queryset = Module.objects.select_related("course").order_by("order").all()
         if "course_pk" in self.kwargs:
             queryset = queryset.filter(course_id=self.kwargs["course_pk"])
         return queryset
@@ -81,7 +84,11 @@ class LessonViewSet(viewsets.ModelViewSet):
     serializer_class = LessonSerializer
 
     def get_queryset(self):
-        queryset = Lesson.objects.select_related("module", "module__course").all()
+        queryset = (
+            Lesson.objects.select_related("module", "module__course")
+            .order_by("order")
+            .all()
+        )
         if "module_pk" in self.kwargs:
             queryset = queryset.filter(module_id=self.kwargs["module_pk"])
         return queryset
