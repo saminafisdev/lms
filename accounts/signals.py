@@ -7,18 +7,16 @@ from .models import User, TeacherProfile, StudentProfile
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
         if instance.role == User.TEACHER:
-            TeacherProfile.objects.create(user=instance)
+            TeacherProfile.objects.get_or_create(user=instance)
         elif instance.role == User.STUDENT:
-            StudentProfile.objects.create(user=instance)
+            StudentProfile.objects.get_or_create(user=instance)
 
 
 @receiver(post_save, sender=User)
 def save_user_profile(sender, instance, **kwargs):
     if instance.role == User.TEACHER:
-        if not hasattr(instance, "teacher_profile"):
-            TeacherProfile.objects.create(user=instance)
-        instance.teacher_profile.save()
+        if hasattr(instance, "teacher_profile"):
+            instance.teacher_profile.save()
     elif instance.role == User.STUDENT:
-        if not hasattr(instance, "student_profile"):
-            StudentProfile.objects.create(user=instance)
-        instance.student_profile.save()
+        if hasattr(instance, "student_profile"):
+            instance.student_profile.save()
