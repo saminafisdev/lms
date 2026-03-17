@@ -10,38 +10,8 @@ from .models import TeacherProfile, StudentProfile
 User = get_user_model()
 
 
-class TeacherProfileSerializer(serializers.ModelSerializer):
-    user_email = serializers.ReadOnlyField(source="user.email")
-
-    class Meta:
-        model = TeacherProfile
-        fields = "__all__"
-
-
-class TeacherProfileCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TeacherProfile
-        exclude = ("user",)
-
-
-class StudentProfileSerializer(serializers.ModelSerializer):
-    user_email = serializers.ReadOnlyField(source="user.email")
-
-    class Meta:
-        model = StudentProfile
-        fields = "__all__"
-
-
-class StudentProfileCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = StudentProfile
-        exclude = ("user",)
-
-
+# Custom User Create Serializer (handling user creation)
 class CustomUserCreateSerializer(UserCreateSerializer):
-    teacher_profile = TeacherProfileCreateSerializer(required=False)
-    student_profile = StudentProfileCreateSerializer(required=False)
-
     class Meta(UserCreateSerializer.Meta):
         model = User
         fields = (
@@ -51,35 +21,12 @@ class CustomUserCreateSerializer(UserCreateSerializer):
             "role",
             "first_name",
             "last_name",
-            "teacher_profile",
-            "student_profile",
         )
-
-    def create(self, validated_data):
-        teacher_profile_data = validated_data.pop("teacher_profile", None)
-        student_profile_data = validated_data.pop("student_profile", None)
-
-        user = super().create(validated_data)
-
-        # Signals will create the profile automatically, we just update it if data was provided
-        if user.role == User.TEACHER and teacher_profile_data:
-            profile, created = TeacherProfile.objects.get_or_create(user=user)
-            for attr, value in teacher_profile_data.items():
-                setattr(profile, attr, value)
-            profile.save()
-        elif user.role == User.STUDENT and student_profile_data:
-            profile, created = StudentProfile.objects.get_or_create(user=user)
-            for attr, value in student_profile_data.items():
-                setattr(profile, attr, value)
-            profile.save()
-
-        return user
+        extra_kwargs = {"role": {"read_only": True}}
 
 
+# Custom User Create with Password Retype Serializer
 class CustomUserCreatePasswordRetypeSerializer(UserCreatePasswordRetypeSerializer):
-    teacher_profile = TeacherProfileCreateSerializer(required=False)
-    student_profile = StudentProfileCreateSerializer(required=False)
-
     class Meta(UserCreatePasswordRetypeSerializer.Meta):
         model = User
         fields = (
@@ -89,31 +36,72 @@ class CustomUserCreatePasswordRetypeSerializer(UserCreatePasswordRetypeSerialize
             "role",
             "first_name",
             "last_name",
-            "teacher_profile",
-            "student_profile",
         )
-
-    def create(self, validated_data):
-        teacher_profile_data = validated_data.pop("teacher_profile", None)
-        student_profile_data = validated_data.pop("student_profile", None)
-
-        user = super().create(validated_data)
-
-        if user.role == User.TEACHER and teacher_profile_data:
-            profile, created = TeacherProfile.objects.get_or_create(user=user)
-            for attr, value in teacher_profile_data.items():
-                setattr(profile, attr, value)
-            profile.save()
-        elif user.role == User.STUDENT and student_profile_data:
-            profile, created = StudentProfile.objects.get_or_create(user=user)
-            for attr, value in student_profile_data.items():
-                setattr(profile, attr, value)
-            profile.save()
-
-        return user
+        extra_kwargs = {"role": {"read_only": True}}
 
 
+# Custom User Serializer (for reading User data)
 class CustomUserSerializer(UserSerializer):
     class Meta(UserSerializer.Meta):
         model = User
         fields = ("id", "email", "role", "first_name", "last_name")
+
+
+class TeacherProfileSerializer(serializers.ModelSerializer):
+    user = CustomUserCreateSerializer()
+
+    class Meta:
+        model = TeacherProfile
+        fields = [
+            "id",
+            "user",
+            "profile_picture",
+            "professional_title",
+            "location",
+            "about",
+            "education",
+            "achievements",
+            "consultation_rate",
+        ]
+
+    def create(self, validated_data):
+        user_data = validated_data.pop("user")
+
+        # Manually set the role to teacher
+        user_data["role"] = User.TEACHER
+
+        # Signal will auto-create the profile, so just create the user
+        user = User.objects.create_user(**user_data)
+
+        # Update the profile created by the signal with the remaining fields
+        teacher_profile = user.teacher_profile
+        for attr, value in validated_data.items():
+            setattr(teacher_profile, attr, value)
+        teacher_profile.save()
+
+        return teacher_profile
+
+
+class StudentProfileSerializer(serializers.ModelSerializer):
+    user = CustomUserCreateSerializer()
+
+    class Meta:
+        model = StudentProfile
+        fields = ["id", "user"]
+
+    def create(self, validated_data):
+        user_data = validated_data.pop("user")
+
+        # Manually set the role to student
+        user_data["role"] = User.STUDENT
+
+        # Signal will auto-create the profile, so just create the user
+        user = User.objects.create_user(**user_data)
+
+        # Update the profile created by the signal with the remaining fields
+        student_profile = user.student_profile
+        for attr, value in validated_data.items():
+            setattr(student_profile, attr, value)
+        student_profile.save()
+
+        return student_profile
