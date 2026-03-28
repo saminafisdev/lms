@@ -6,7 +6,7 @@ from accounts.models import TeacherProfile
 from .models import (
     Course,
     Scholarship,
-    Category,
+    CourseCategory,
     Module,
     Lesson,
     Quiz,
@@ -17,7 +17,7 @@ from .models import (
 from .serializers import (
     CourseSerializer,
     ScholarshipSerializer,
-    CategorySerializer,
+    CourseCategorySerializer,
     ModuleSerializer,
     LessonSerializer,
     QuizSerializer,
@@ -77,9 +77,9 @@ class ScholarshipViewSet(viewsets.ModelViewSet):
     serializer_class = ScholarshipSerializer
 
 
-class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.all()
-    serializer_class = CategorySerializer
+class CourseCategoryViewSet(viewsets.ModelViewSet):
+    queryset = CourseCategory.objects.all()
+    serializer_class = CourseCategorySerializer
 
 
 class ModuleViewSet(viewsets.ModelViewSet):

@@ -2,7 +2,7 @@ from rest_framework import serializers
 from accounts.serializers import TeacherProfileSerializer
 from accounts.models import TeacherProfile
 from .models import (
-    Category,
+    CourseCategory,
     Course,
     Scholarship,
     Module,
@@ -14,9 +14,9 @@ from .models import (
 )
 
 
-class CategorySerializer(serializers.ModelSerializer):
+class CourseCategorySerializer(serializers.ModelSerializer):
     class Meta:
-        model = Category
+        model = CourseCategory
         fields = "__all__"
 
 
@@ -78,11 +78,11 @@ class ModuleSerializer(serializers.ModelSerializer):
 
 
 class CourseSerializer(serializers.ModelSerializer):
-    category = CategorySerializer(read_only=True)
+    category = CourseCategorySerializer(read_only=True)
     teacher = TeacherProfileSerializer(read_only=True)
     modules = ModuleSerializer(many=True, read_only=True)
     category_id = serializers.PrimaryKeyRelatedField(
-        queryset=Category.objects.all(),
+        queryset=CourseCategory.objects.all(),
         source="category",
         write_only=True,
         required=False,

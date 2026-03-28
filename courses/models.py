@@ -3,7 +3,7 @@ from django_resized import ResizedImageField
 from accounts.models import TeacherProfile
 
 
-class Category(models.Model):
+class CourseCategory(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
 
@@ -11,7 +11,7 @@ class Category(models.Model):
         return self.name
 
     class Meta:
-        verbose_name_plural = "Categories"
+        verbose_name_plural = "Course Categories"
 
 
 class Course(models.Model):
@@ -27,7 +27,7 @@ class Course(models.Model):
     )
 
     category = models.ForeignKey(
-        Category, on_delete=models.SET_NULL, null=True, related_name="courses"
+        CourseCategory, on_delete=models.SET_NULL, null=True, related_name="courses"
     )
     title = models.CharField(max_length=255)
     subtitle = models.CharField(max_length=255, blank=True, null=True)

@@ -3,7 +3,7 @@ from rest_framework_nested import routers
 from .views import (
     CourseViewSet,
     ScholarshipViewSet,
-    CategoryViewSet,
+    CourseCategoryViewSet,
     ModuleViewSet,
     LessonViewSet,
     QuizViewSet,
@@ -15,7 +15,7 @@ from .views import (
 router = routers.DefaultRouter()
 router.register(r"courses", CourseViewSet, basename="course")
 router.register(r"scholarships", ScholarshipViewSet)
-router.register(r"categories", CategoryViewSet)
+router.register(r"course-categories", CourseCategoryViewSet)
 
 course_router = routers.NestedDefaultRouter(router, r"courses", lookup="course")
 course_router.register(r"modules", ModuleViewSet, basename="course-modules")
@@ -30,7 +30,9 @@ lesson_router.register(r"assignments", AssignmentViewSet, basename="lesson-assig
 quiz_router = routers.NestedDefaultRouter(lesson_router, r"quizzes", lookup="quiz")
 quiz_router.register(r"questions", QuestionViewSet, basename="quiz-questions")
 
-question_router = routers.NestedDefaultRouter(quiz_router, r"questions", lookup="question")
+question_router = routers.NestedDefaultRouter(
+    quiz_router, r"questions", lookup="question"
+)
 question_router.register(r"options", OptionViewSet, basename="question-options")
 
 urlpatterns = [

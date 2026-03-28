@@ -1,8 +1,18 @@
 from django.contrib import admin
-from .models import *
+from .models import (
+    Course,
+    CourseCategory,
+    Scholarship,
+    Module,
+    Lesson,
+    Quiz,
+    Question,
+    Option,
+    Assignment,
+)
 
 admin.site.register(Course)
-admin.site.register(Category)
+admin.site.register(CourseCategory)
 admin.site.register(Scholarship)
 admin.site.register(Module)
 admin.site.register(Lesson)
