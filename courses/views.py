@@ -38,20 +38,38 @@ class CourseFilter(django_filters.FilterSet):
 
 
 class CourseViewSet(viewsets.ModelViewSet):
-    queryset = (
-        Course.objects.select_related("category", "teacher", "teacher__user")
-        .prefetch_related(
-            Prefetch("modules", queryset=Module.objects.order_by("order")),
-            Prefetch("modules__lessons", queryset=Lesson.objects.order_by("order")),
-            "modules__lessons__quiz_details__questions__options",
-            "modules__lessons__assignment_details",
-        )
-        .all()
-    )
     serializer_class = CourseSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_class = CourseFilter
     search_fields = ["title", "subtitle", "description"]
+
+    def get_queryset(self):
+        base_qs = (
+            Course.objects.select_related("category", "teacher", "teacher__user")
+            .prefetch_related(
+                Prefetch("modules", queryset=Module.objects.order_by("order")),
+                Prefetch("modules__lessons", queryset=Lesson.objects.order_by("order")),
+                "modules__lessons__quiz_details__questions__options",
+                "modules__lessons__assignment_details",
+            )
+        )
+
+        user = self.request.user
+
+        if not user.is_authenticated:
+            # Unauthenticated users see only active courses
+            return base_qs.filter(is_active=True)
+
+        role = getattr(user, "role", None)
+
+        if role == "admin" or user.is_staff:
+            return base_qs.all()
+
+        if role == "teacher":
+            return base_qs.filter(teacher__user=user)
+
+        # Students (and any other role) see only active courses
+        return base_qs.filter(is_active=True)
 
 
 class ScholarshipViewSet(viewsets.ModelViewSet):

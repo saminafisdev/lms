@@ -43,6 +43,9 @@ class Course(models.Model):
     teacher = models.ForeignKey(
         TeacherProfile, on_delete=models.SET_NULL, null=True, related_name="courses"
     )
+    is_active = models.BooleanField(
+        default=True, help_text="Active courses are visible to students"
+    )
     num_lessons = models.PositiveIntegerField(default=0)
     thumbnail = ResizedImageField(
         size=[800, 600],
