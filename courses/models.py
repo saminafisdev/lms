@@ -37,6 +37,7 @@ class Course(models.Model):
     )
     duration = models.PositiveSmallIntegerField(help_text="Number of weeks")
     hours_per_session = models.DecimalField(max_digits=5, decimal_places=2)
+    total_hours = models.DecimalField(max_digits=5, decimal_places=2)
     level = models.CharField(max_length=15, choices=LEVEL_CHOICES, default="beginner")
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default="upcoming")
     start_date = models.DateField(blank=True, null=True)
