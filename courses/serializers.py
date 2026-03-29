@@ -70,11 +70,16 @@ class LessonSerializer(serializers.ModelSerializer):
 
 class ModuleSerializer(serializers.ModelSerializer):
     lessons = LessonSerializer(many=True, read_only=True)
+    total_lessons = serializers.IntegerField(source="lessons.count", read_only=True)
+    total_duration = serializers.SerializerMethodField()
 
     class Meta:
         model = Module
         fields = "__all__"
         extra_kwargs = {"course": {"required": False}}
+
+    def get_total_duration(self, obj):
+        return sum(lesson.duration_in_minutes for lesson in obj.lessons.all())
 
 
 class CourseSerializer(serializers.ModelSerializer):
@@ -95,7 +100,11 @@ class CourseSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    total_lessons = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
         fields = "__all__"
+
+    def get_total_lessons(self, obj):
+        return sum(module.lessons.count() for module in obj.modules.all())

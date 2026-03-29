@@ -47,7 +47,6 @@ class Course(models.Model):
     is_active = models.BooleanField(
         default=True, help_text="Active courses are visible to students"
     )
-    num_lessons = models.PositiveIntegerField(default=0)
     thumbnail = ResizedImageField(
         size=[800, 600],
         crop=["middle", "center"],
@@ -135,6 +134,9 @@ class Lesson(models.Model):
     )
     file_content = models.FileField(upload_to="lessons/files/", blank=True, null=True)
     video_content = models.FileField(upload_to="lessons/videos/", blank=True, null=True)
+    duration_in_minutes = models.PositiveIntegerField(
+        default=0, help_text="Duration in minutes"
+    )
     order = models.PositiveIntegerField(default=0)
 
     class Meta:
