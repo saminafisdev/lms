@@ -10,12 +10,14 @@ from .views import (
     QuestionViewSet,
     OptionViewSet,
     AssignmentViewSet,
+    EnrollmentViewSet,
 )
 
 router = routers.DefaultRouter()
 router.register(r"courses", CourseViewSet, basename="course")
 router.register(r"scholarships", ScholarshipViewSet)
 router.register(r"course-categories", CourseCategoryViewSet)
+router.register(r"enrollments", EnrollmentViewSet, basename="enrollment")
 
 course_router = routers.NestedDefaultRouter(router, r"courses", lookup="course")
 course_router.register(r"modules", ModuleViewSet, basename="course-modules")

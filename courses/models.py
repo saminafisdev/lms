@@ -64,6 +64,22 @@ class Course(models.Model):
         return self.title
 
 
+class Enrollment(models.Model):
+    user = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="enrollments"
+    )
+    course = models.ForeignKey(
+        Course, on_delete=models.CASCADE, related_name="enrollments"
+    )
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "course")
+
+    def __str__(self):
+        return f"{self.user.email} enrolled in {self.course.title}"
+
+
 class Scholarship(models.Model):
     LEVEL_CHOICES = (
         ("high school", "High School"),
@@ -136,6 +152,9 @@ class Lesson(models.Model):
     video_content = models.FileField(upload_to="lessons/videos/", blank=True, null=True)
     duration_in_minutes = models.PositiveIntegerField(
         default=0, help_text="Duration in minutes"
+    )
+    is_preview = models.BooleanField(
+        default=False, help_text="If True, this lesson is available for free preview."
     )
     order = models.PositiveIntegerField(default=0)
 

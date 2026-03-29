@@ -13,6 +13,7 @@ from .models import (
     Question,
     Option,
     Assignment,
+    Enrollment,
 )
 from .serializers import (
     CourseSerializer,
@@ -24,6 +25,7 @@ from .serializers import (
     QuestionSerializer,
     OptionSerializer,
     AssignmentSerializer,
+    EnrollmentSerializer,
 )
 
 
@@ -70,6 +72,19 @@ class CourseViewSet(viewsets.ModelViewSet):
 
         # Students (and any other role) see only active courses
         return base_qs.filter(is_active=True)
+
+
+class EnrollmentViewSet(viewsets.ModelViewSet):
+    serializer_class = EnrollmentSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or user.role == "admin":
+            return Enrollment.objects.all()
+        return Enrollment.objects.filter(user=user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 
 class ScholarshipViewSet(viewsets.ModelViewSet):

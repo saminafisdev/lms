@@ -9,6 +9,7 @@ from .models import (
     Question,
     Option,
     Assignment,
+    Enrollment,
 )
 
 admin.site.register(Course)
@@ -20,3 +21,4 @@ admin.site.register(Quiz)
 admin.site.register(Question)
 admin.site.register(Option)
 admin.site.register(Assignment)
+admin.site.register(Enrollment)
