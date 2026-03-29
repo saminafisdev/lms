@@ -148,6 +148,8 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.AllowAny",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_PAGINATION_CLASS": "config.pagination.StandardPagination",
+    "PAGE_SIZE": 9,
 }
 
 SIMPLE_JWT = {
