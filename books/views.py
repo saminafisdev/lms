@@ -15,6 +15,7 @@ class BookCategoryViewSet(viewsets.ModelViewSet):
     queryset = BookCategory.objects.all()
     serializer_class = BookCategorySerializer
     lookup_field = "slug"
+    pagination_class = None
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
