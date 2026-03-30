@@ -16,6 +16,10 @@ class DoorViewSet(viewsets.ModelViewSet):
         """
         Return different serializer depending on user role.
         """
+        # drf-spectacular sets this flag during schema generation
+        if getattr(self, 'swagger_fake_view', False):
+            return AdminDoorSerializer  # show full schema in docs
+
         user = self.request.user
         if user.is_authenticated and user.role == "admin":
             return AdminDoorSerializer
