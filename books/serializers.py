@@ -1,3 +1,4 @@
+from config.fields import RichTextField
 from rest_framework import serializers
 from .models import Book, BookCategory, BookGalleryImage
 
@@ -18,6 +19,7 @@ class AdminBookSerializer(serializers.ModelSerializer):
     """
     category_name = serializers.ReadOnlyField(source="category.name")
     gallery_images = BookGalleryImageSerializer(many=True, read_only=True)
+    description = RichTextField()
 
     class Meta:
         model = Book
@@ -37,6 +39,7 @@ class PublicBookSerializer(serializers.ModelSerializer):
     """
     category = BookCategorySerializer(read_only=True)
     gallery_images = BookGalleryImageSerializer(many=True, read_only=True)
+    description = RichTextField()
 
     class Meta:
         model = Book

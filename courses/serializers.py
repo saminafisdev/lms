@@ -1,3 +1,4 @@
+from config.fields import RichTextField
 from rest_framework import serializers
 from accounts.serializers import TeacherProfileSerializer
 from accounts.models import TeacherProfile
@@ -137,6 +138,7 @@ class CourseSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
     total_lessons = serializers.SerializerMethodField()
+    description = RichTextField()
 
     class Meta:
         model = Course
