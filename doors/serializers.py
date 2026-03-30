@@ -7,7 +7,7 @@ class AdminDoorSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = Door
-        fields = ["id", "title", "content", "icon", "is_visible", "created_at", "updated_at"]
+        fields = ["id", "title", "content", "icon", "redirect_link", "is_visible", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 class DoorSerializer(serializers.ModelSerializer):
@@ -16,5 +16,5 @@ class DoorSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = Door
-        fields = ["id", "title", "content", "icon", "created_at", "updated_at"]
+        fields = ["id", "title", "content", "icon", "redirect_link", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]

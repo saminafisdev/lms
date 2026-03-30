@@ -12,6 +12,7 @@ class Door(models.Model):
         force_format="WEBP",
     )
     is_visible = models.BooleanField(default=True)
+    redirect_link = models.URLField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
