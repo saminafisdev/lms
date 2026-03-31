@@ -26,6 +26,7 @@ class Book(models.Model):
     title = models.CharField(max_length=255)
     slug = models.SlugField(unique=True, blank=True)
     author = models.CharField(max_length=255)
+    author_designation = models.CharField(max_length=255)
     description = models.TextField()
     cover_image = ResizedImageField(
         size=[800, 1000],

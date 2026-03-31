@@ -24,7 +24,7 @@ class AdminBookSerializer(serializers.ModelSerializer):
     class Meta:
         model = Book
         fields = [
-            "id", "category", "category_name", "title", "slug", "author", "description", 
+            "id", "category", "category_name", "title", "slug", "author", "author_designation", "description", 
             "cover_image", "isbn", "language", "publisher", "published_date", 
             "number_of_pages", "sample_file", "video_url", "has_physical", 
             "physical_price", "stock_count", "has_digital", "digital_price", 
