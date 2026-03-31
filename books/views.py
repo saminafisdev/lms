@@ -38,6 +38,9 @@ class BookViewSet(viewsets.ModelViewSet):
     ordering_fields = ["published_date", "created_at", "title"]
 
     def get_serializer_class(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return AdminBookSerializer  # show full schema in docs
+
         user = self.request.user
         if user.is_authenticated and user.role == "admin":
             return AdminBookSerializer
