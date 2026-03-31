@@ -54,11 +54,13 @@ INSTALLED_APPS = [
     "django_filters",
     "rest_framework_simplejwt",
     "drf_spectacular",
+    "taggit",
     "accounts",
     "courses",
     "consultations",
     "doors",
     "books",
+    "blogs",
 ]
 
 MIDDLEWARE = [
@@ -192,3 +194,6 @@ if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
 else:
     CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
+
+
+TAGGIT_CASE_INSENSITIVE = True
