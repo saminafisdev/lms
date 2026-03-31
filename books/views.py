@@ -1,10 +1,12 @@
-from rest_framework import viewsets, permissions, filters
+from rest_framework import viewsets, permissions, filters, status
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Book, BookCategory, BookGalleryImage
 from .serializers import (
-    BookCategorySerializer, AdminBookSerializer, PublicBookSerializer
+    BookCategorySerializer, AdminBookSerializer, PublicBookSerializer, BookGalleryImageSerializer
 )
-from doors.permissions import IsAdminRole # Reuse logic
+from doors.permissions import IsAdminRole
+
 
 class BookCategoryViewSet(viewsets.ModelViewSet):
     """
@@ -24,6 +26,7 @@ class BookCategoryViewSet(viewsets.ModelViewSet):
             permission_classes = [IsAdminRole]
         return [permission() for permission in permission_classes]
 
+
 class BookViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing books.
@@ -39,7 +42,7 @@ class BookViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         if getattr(self, 'swagger_fake_view', False):
-            return AdminBookSerializer  # show full schema in docs
+            return AdminBookSerializer
 
         user = self.request.user
         if user.is_authenticated and user.role == "admin":
@@ -58,3 +61,53 @@ class BookViewSet(viewsets.ModelViewSet):
         if user.is_authenticated and user.role == "admin":
             return Book.objects.all()
         return Book.objects.filter(is_visible=True)
+
+
+class BookGalleryImageViewSet(viewsets.ModelViewSet):
+    """
+    Manage gallery images for a specific book.
+    Admin only — nested under /books/{book_slug}/gallery/
+    Supports bulk upload via POST with multiple files under the 'images' key.
+    """
+    serializer_class = BookGalleryImageSerializer
+    permission_classes = [IsAdminRole]
+
+    def get_queryset(self):
+        return BookGalleryImage.objects.filter(book__slug=self.kwargs['book_slug'])
+
+    def perform_create(self, serializer):
+        book = Book.objects.get(slug=self.kwargs['book_slug'])
+        serializer.save(book=book)
+
+    def create(self, request, *args, **kwargs):
+        try:
+            book = Book.objects.get(slug=self.kwargs['book_slug'])
+        except Book.DoesNotExist:
+            return Response(
+                {"error": "Book not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        images = request.FILES.getlist('images')
+
+        if not images:
+            return Response(
+                {"error": "No images provided. Send files under the 'images' key."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Continue ordering from where existing images left off
+        last_order = BookGalleryImage.objects.filter(book=book).count()
+
+        created = []
+        for index, image in enumerate(images):
+            instance = BookGalleryImage.objects.create(
+                book=book,
+                image=image,
+                order=last_order + index
+            )
+            created.append(
+                BookGalleryImageSerializer(instance, context={'request': request}).data
+            )
+
+        return Response(created, status=status.HTTP_201_CREATED)
