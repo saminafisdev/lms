@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "doors",
     "books",
     "blogs",
+    "orders",
 ]
 
 MIDDLEWARE = [
