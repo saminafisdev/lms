@@ -1,8 +1,9 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, filters
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
+from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import TeacherProfile, StudentProfile
 from .permissions import IsTeacher
@@ -15,6 +16,16 @@ from .serializers import (
 class TeacherProfileViewSet(viewsets.ModelViewSet):
     queryset = TeacherProfile.objects.all()
     serializer_class = TeacherProfileSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ["professional_title", "location"]
+    search_fields = [
+        "user__first_name",
+        "user__last_name",
+        "user__email",
+        "professional_title",
+        "location",
+        "about",
+    ]
 
     @action(
         detail=False,
