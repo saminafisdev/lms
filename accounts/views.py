@@ -1,11 +1,13 @@
-from rest_framework import viewsets, filters
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import permissions
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
-from .models import TeacherProfile, StudentProfile
+from config.sendgrid_contacts import add_contact, remove_contact
+
+from .models import StudentProfile, TeacherProfile
 from .permissions import IsTeacher
 from .serializers import (
     StudentProfileSerializer,
@@ -49,3 +51,54 @@ class StudentProfileViewSet(viewsets.ModelViewSet):
     queryset = StudentProfile.objects.all()
     serializer_class = StudentProfileSerializer
     # permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        profile = serializer.save()
+        if profile.is_subscribed_to_newsletter:
+            add_contact(profile.user)
+
+    def perform_update(self, serializer):
+        old_subscribed = self.get_object().is_subscribed_to_newsletter
+        profile = serializer.save()
+        new_subscribed = profile.is_subscribed_to_newsletter
+
+        if not old_subscribed and new_subscribed:
+            add_contact(profile.user)
+        elif old_subscribed and not new_subscribed:
+            remove_contact(profile.user)
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="newsletter/subscribe",
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def newsletter_subscribe(self, request):
+        profile = getattr(request.user, "student_profile", None)
+        if not profile:
+            return Response(
+                {"error": "Student profile not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        profile.is_subscribed_to_newsletter = True
+        profile.save(update_fields=["is_subscribed_to_newsletter"])
+        add_contact(request.user)
+        return Response({"detail": "Subscribed to newsletter."})
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="newsletter/unsubscribe",
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def newsletter_unsubscribe(self, request):
+        profile = getattr(request.user, "student_profile", None)
+        if not profile:
+            return Response(
+                {"error": "Student profile not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        profile.is_subscribed_to_newsletter = False
+        profile.save(update_fields=["is_subscribed_to_newsletter"])
+        remove_contact(request.user)
+        return Response({"detail": "Unsubscribed from newsletter."})
