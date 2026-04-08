@@ -1,4 +1,4 @@
-from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rest_framework.permissions import BasePermission
 
 
 class IsAdminRole(BasePermission):
@@ -11,6 +11,7 @@ class IsAdminOrAuthor(BasePermission):
     Admin can do anything.
     Author can only edit/delete their own blog.
     """
+
     def has_permission(self, request, view):
         return request.user.is_authenticated
 
@@ -26,6 +27,7 @@ class IsTeacherOrAdmin(BasePermission):
     """
     Only teachers (with a TeacherProfile) or admins can create blogs.
     """
+
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
