@@ -1,17 +1,19 @@
-from email_templates.sendgrid import send_email
 import stripe as stripe_lib
-from orders.stripe import construct_webhook_event
-from django.views.decorators.csrf import csrf_exempt
-from rest_framework.views import APIView
-from django.utils.decorators import method_decorator
 from django.conf import settings
-from orders.stripe import create_payment_intent
+from django.db import models
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
+from config.permissions import IsAdminRole
+from email_templates.sendgrid import send_email
 from orders.models import ShippingAddress
+from orders.serializers import BookSaleSerializer
+from orders.stripe import construct_webhook_event, create_payment_intent
 
 from .models import Cart, CartItem, Order, OrderItem
 from .serializers import (
@@ -361,3 +363,112 @@ class StripeWebhookView(APIView):
                     "amount": str(order.total_amount),
                 },
             )
+
+
+class BookSalesViewSet(viewsets.ViewSet):
+    """
+    Admin-only — book sales dashboard.
+    """
+
+    permission_classes = [IsAdminRole]
+
+    @extend_schema(responses={200: BookSaleSerializer(many=True)})
+    def list(self, request):
+        """
+        GET /orders/book-sales/
+        Returns all book order items with full sales info.
+        Supports filtering by type, status, and date range.
+        """
+        queryset = (
+            OrderItem.objects.filter(item_type__in=["physical_book", "digital_book"])
+            .select_related("order", "order__user", "order__shipping_address", "book")
+            .order_by("-order__created_at")
+        )
+
+        # Filter by type
+        item_type = request.query_params.get("type")
+        if item_type in ["physical_book", "digital_book"]:
+            queryset = queryset.filter(item_type=item_type)
+
+        # Filter by payment status
+        payment_status = request.query_params.get("status")
+        if payment_status in ["pending", "completed", "failed"]:
+            queryset = queryset.filter(order__status=payment_status)
+
+        # Filter by date range
+        date_from = request.query_params.get("date_from")
+        date_to = request.query_params.get("date_to")
+        if date_from:
+            queryset = queryset.filter(order__created_at__date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(order__created_at__date__lte=date_to)
+
+        # Search by student email or book title
+        search = request.query_params.get("search")
+        if search:
+            queryset = queryset.filter(
+                models.Q(order__user__email__icontains=search)
+                | models.Q(book__title__icontains=search)
+            )
+
+        serializer = BookSaleSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(responses={200: BookSaleSerializer})
+    def retrieve(self, request, pk=None):
+        """
+        GET /orders/book-sales/{order_id}/
+        Returns detail for a specific book order including shipping address.
+        """
+        try:
+            item = OrderItem.objects.select_related(
+                "order", "order__user", "order__shipping_address", "book"
+            ).get(order__id=pk, item_type__in=["physical_book", "digital_book"])
+        except OrderItem.DoesNotExist:
+            return Response(
+                {"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+        return Response(BookSaleSerializer(item).data)
+
+    @extend_schema(responses={200: None})
+    @action(detail=False, methods=["get"], url_path="summary")
+    def summary(self, request):
+        """
+        GET /orders/book-sales/summary/
+        Returns aggregated sales stats for the dashboard header.
+        """
+        from django.db.models import Count, Sum
+
+        base_qs = OrderItem.objects.filter(
+            item_type__in=["physical_book", "digital_book"], order__status="completed"
+        )
+
+        stats = base_qs.aggregate(
+            total_revenue=Sum("total_price"),
+            total_orders=Count("id"),
+        )
+
+        physical_stats = base_qs.filter(item_type="physical_book").aggregate(
+            count=Count("id"),
+            revenue=Sum("total_price"),
+        )
+
+        digital_stats = base_qs.filter(item_type="digital_book").aggregate(
+            count=Count("id"),
+            revenue=Sum("total_price"),
+        )
+
+        return Response(
+            {
+                "total_revenue": stats["total_revenue"] or 0,
+                "total_orders": stats["total_orders"] or 0,
+                "physical": {
+                    "count": physical_stats["count"] or 0,
+                    "revenue": physical_stats["revenue"] or 0,
+                },
+                "digital": {
+                    "count": digital_stats["count"] or 0,
+                    "revenue": digital_stats["revenue"] or 0,
+                },
+            }
+        )
