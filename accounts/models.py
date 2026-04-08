@@ -97,6 +97,7 @@ class StudentProfile(models.Model):
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name="student_profile"
     )
+    is_subscribed_to_newsletter = models.BooleanField(default=True)
 
     def __str__(self):
         return f"{self.user.email} - Student Profile"
