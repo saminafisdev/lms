@@ -149,3 +149,53 @@ class CartCheckoutSerializer(serializers.Serializer):
     """For checking out physical books from cart."""
 
     shipping_address = ShippingAddressSerializer()
+
+
+class BookSaleSerializer(serializers.ModelSerializer):
+    order_id = serializers.IntegerField(source="order.id")
+    student_name = serializers.SerializerMethodField()
+    student_email = serializers.ReadOnlyField(source="order.user.email")
+    book_title = serializers.ReadOnlyField(source="book.title")
+    type = serializers.CharField(source="item_type")
+    amount = serializers.DecimalField(
+        source="total_price", max_digits=10, decimal_places=2
+    )
+    payment_status = serializers.ReadOnlyField(source="order.status")
+    payment_reference = serializers.ReadOnlyField(source="order.payment_reference")
+    date = serializers.DateTimeField(source="order.created_at")
+    shipping_address = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            "order_id",
+            "student_name",
+            "student_email",
+            "book_title",
+            "type",
+            "quantity",
+            "amount",
+            "payment_status",
+            "payment_reference",
+            "date",
+            "shipping_address",
+        ]
+
+    def get_student_name(self, obj):
+        user = obj.order.user
+        return f"{user.first_name} {user.last_name}".strip() or user.email
+
+    def get_shipping_address(self, obj):
+        if obj.item_type != "physical_book":
+            return None
+        address = getattr(obj.order, "shipping_address", None)
+        if not address:
+            return None
+        return {
+            "full_name": address.full_name,
+            "phone": address.phone,
+            "address_line": address.address_line,
+            "city": address.city,
+            "country": address.country,
+            "postal_code": address.postal_code,
+        }
