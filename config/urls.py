@@ -34,9 +34,10 @@ urlpatterns = [
     path("", include("consultations.urls")),
     path("", include("doors.urls")),
     path("", include("books.urls")),
-    path('', include('orders.urls')),
+    path("", include("orders.urls")),
     path("blogs/", include("blogs.urls")),
     path("videos/", include("videos.urls")),
+    path("", include("email_templates.urls")),
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
         "docs/",

@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     "blogs",
     "orders",
     "videos",
+    "email_templates",
 ]
 
 MIDDLEWARE = [
@@ -159,8 +160,12 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=env("ACCESS_TOKEN_LIFETIME_MINUTES", default=60)),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=env("REFRESH_TOKEN_LIFETIME_DAYS", default=7)),
+    "ACCESS_TOKEN_LIFETIME": timedelta(
+        minutes=env("ACCESS_TOKEN_LIFETIME_MINUTES", default=60)
+    ),
+    "REFRESH_TOKEN_LIFETIME": timedelta(
+        days=env("REFRESH_TOKEN_LIFETIME_DAYS", default=7)
+    ),
     "AUTH_HEADER_TYPES": ("JWT",),
 }
 
@@ -199,3 +204,9 @@ else:
 
 
 TAGGIT_CASE_INSENSITIVE = True
+
+
+# SENDGRID CONFIG
+SENDGRID_API_KEY = env("SENDGRID_API_KEY")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="noreply@zahraahassane.com")
+DEFAULT_FROM_NAME = env("DEFAULT_FROM_NAME", default="Zahra LMS")
