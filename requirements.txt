@@ -40,6 +40,8 @@ sendgrid==6.12.5
 social-auth-app-django==5.7.0
 social-auth-core==4.8.5
 sqlparse==0.5.5
+stripe==15.0.1
+typing_extensions==4.15.0
 uritemplate==4.2.0
 urllib3==2.6.3
 webencodings==0.5.1

@@ -1,3 +1,11 @@
+from email_templates.sendgrid import send_email
+import stripe as stripe_lib
+from orders.stripe import construct_webhook_event
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.views import APIView
+from django.utils.decorators import method_decorator
+from django.conf import settings
+from orders.stripe import create_payment_intent
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -164,9 +172,27 @@ class OrderViewSet(viewsets.ViewSet):
             total_price=price,
         )
 
-        # TODO: initiate payment gateway here
-        # For now return pending order
-        return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+        # Create Stripe PaymentIntent
+        intent = create_payment_intent(
+            amount=price,
+            metadata={
+                "order_id": order.id,
+                "user_id": request.user.id,
+            },
+        )
+
+        # Save payment reference
+        order.payment_reference = intent["id"]
+        order.save(update_fields=["payment_reference"])
+
+        return Response(
+            {
+                "order": OrderSerializer(order).data,
+                "client_secret": intent["client_secret"],
+                "publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
     @extend_schema(request=CartCheckoutSerializer, responses={201: OrderSerializer})
     @action(detail=False, methods=["post"], url_path="checkout")
@@ -214,53 +240,124 @@ class OrderViewSet(viewsets.ViewSet):
                 total_price=item.get_total_price(),
             )
 
-        # TODO: initiate payment gateway here
-        # Cart is cleared after payment confirmation, not here
-        return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+        # Create Stripe PaymentIntent
+        intent = create_payment_intent(
+            amount=total,
+            metadata={
+                "order_id": order.id,
+                "user_id": request.user.id,
+            },
+        )
 
-    @extend_schema(exclude=True)  # hide webhook from public docs
-    @action(detail=False, methods=["post"], url_path="webhook")
-    def webhook(self, request):
-        """
-        POST /orders/webhook/
-        Payment gateway webhook — mark order as completed.
-        Plug in your gateway verification logic here.
-        """
-        payment_reference = request.data.get("payment_reference")
-        payment_status = request.data.get("status")
+        order.payment_reference = intent["id"]
+        order.save(update_fields=["payment_reference"])
+
+        return Response(
+            {
+                "order": OrderSerializer(order).data,
+                "client_secret": intent["client_secret"],
+                "publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class StripeWebhookView(APIView):
+    """
+    Stripe sends signed events here after payment.
+    Must be csrf_exempt — Stripe signs requests with its own signature.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        payload = request.body
+        sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
 
         try:
-            order = Order.objects.get(payment_reference=payment_reference)
-        except Order.DoesNotExist:
+            event = construct_webhook_event(payload, sig_header)
+        except ValueError:
             return Response(
-                {"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND
+                {"error": "Invalid payload."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        except stripe_lib.error.SignatureVerificationError:
+            return Response(
+                {"error": "Invalid signature."}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        if payment_status == "success":
-            order.status = "completed"
-            order.save()
-            self._fulfill_order(order)
-        else:
+        if event["type"] == "payment_intent.succeeded":
+            self._handle_payment_success(event["data"]["object"])
+        elif event["type"] == "payment_intent.payment_failed":
+            self._handle_payment_failed(event["data"]["object"])
+
+        return Response({"status": "ok"})
+
+    def _handle_payment_success(self, intent):
+        metadata = getattr(intent, "metadata", {})
+        order_id = metadata["order_id"]
+        if not order_id:
+            return
+        try:
+            order = Order.objects.get(id=order_id)
+        except Order.DoesNotExist:
+            return
+
+        order.status = "completed"
+        order.save()
+        self._fulfill_order(order)
+
+    def _handle_payment_failed(self, intent):
+        order_id = intent["metadata"].get("order_id")
+        if not order_id:
+            return
+        try:
+            order = Order.objects.get(id=order_id)
             order.status = "failed"
             order.save()
-
-        return Response({"detail": "Webhook received."})
+        except Order.DoesNotExist:
+            return
 
     def _fulfill_order(self, order):
-        """Post-payment fulfillment per item type."""
         for item in order.items.all():
             if item.item_type == "physical_book":
-                # Decrement stock
                 item.book.stock_count -= item.quantity
                 item.book.save(update_fields=["stock_count"])
-                # TODO: create PhysicalDelivery record here
 
             elif item.item_type == "digital_book":
-                pass  # access granted via has_access() check
+                send_email(
+                    to_email=order.user.email,
+                    purpose="book_purchase",
+                    template_data={
+                        "first_name": order.user.first_name or "there",
+                        "book_title": item.book.title,
+                        "format": "Digital",
+                        "amount": str(order.total_amount),
+                    },
+                )
 
             elif item.item_type == "course":
-                pass  # enrollment granted via has_access() check
+                send_email(
+                    to_email=order.user.email,
+                    purpose="course_purchase",
+                    template_data={
+                        "first_name": order.user.first_name or "there",
+                        "course_name": item.course.title,
+                        "amount": str(order.total_amount),
+                    },
+                )
 
-        # Clear cart after successful physical book order
         if order.order_type == "cart":
             Cart.objects.filter(user=order.user).first().items.all().delete()
+            send_email(
+                to_email=order.user.email,
+                purpose="book_purchase",
+                template_data={
+                    "first_name": order.user.first_name or "there",
+                    "book_title": ", ".join(
+                        item.book.title for item in order.items.all()
+                    ),
+                    "format": "Physical",
+                    "amount": str(order.total_amount),
+                },
+            )
