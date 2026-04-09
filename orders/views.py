@@ -10,7 +10,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from config.permissions import IsAdminRole
-from email_templates.sendgrid import send_email
+from courses.models import Enrollment
+from email_templates.sendgrid import send_email, send_plain_email
 from orders.models import ShippingAddress
 from orders.serializers import BookSaleSerializer
 from orders.stripe import construct_webhook_event, create_payment_intent
@@ -147,7 +148,7 @@ class OrderViewSet(viewsets.ViewSet):
     def direct_purchase(self, request):
         """
         POST /orders/direct/
-        Buy a course or digital book directly.
+        Buy a course, bundle, or digital book directly.
         """
         serializer = DirectPurchaseSerializer(
             data=request.data, context={"request": request}
@@ -163,12 +164,14 @@ class OrderViewSet(viewsets.ViewSet):
         )
 
         course = obj if item_type == "course" else None
+        bundle = obj if item_type == "bundle" else None
         book = obj if item_type == "digital_book" else None
 
         OrderItem.objects.create(
             order=order,
             item_type=item_type,
             course=course,
+            bundle=bundle,
             book=book,
             unit_price=price,
             total_price=price,
@@ -321,7 +324,7 @@ class StripeWebhookView(APIView):
             return
 
     def _fulfill_order(self, order):
-        for item in order.items.all():
+        for item in order.items.select_related("course", "bundle", "book").all():
             if item.item_type == "physical_book":
                 item.book.stock_count -= item.quantity
                 item.book.save(update_fields=["stock_count"])
@@ -339,6 +342,7 @@ class StripeWebhookView(APIView):
                 )
 
             elif item.item_type == "course":
+                Enrollment.objects.get_or_create(user=order.user, course=item.course)
                 send_email(
                     to_email=order.user.email,
                     purpose="course_purchase",
@@ -348,6 +352,34 @@ class StripeWebhookView(APIView):
                         "amount": str(order.total_amount),
                     },
                 )
+
+            elif item.item_type == "bundle":
+                bundle = item.bundle
+                for course in bundle.courses.all():
+                    Enrollment.objects.get_or_create(user=order.user, course=course)
+                course_names = ", ".join(c.title for c in bundle.courses.all())
+                sent = send_email(
+                    to_email=order.user.email,
+                    purpose="bundle_purchase",
+                    template_data={
+                        "first_name": order.user.first_name or "there",
+                        "bundle_name": bundle.name,
+                        "course_names": course_names,
+                        "amount": str(order.total_amount),
+                    },
+                )
+                if not sent:
+                    send_plain_email(
+                        to_email=order.user.email,
+                        subject=f"You've purchased {bundle.name}!",
+                        body=(
+                            f"Hi {order.user.first_name or 'there'},\n\n"
+                            f"Thank you for purchasing the {bundle.name} bundle.\n"
+                            f"You now have access to: {course_names}.\n\n"
+                            f"Amount paid: {order.total_amount}\n\n"
+                            "Happy learning!"
+                        ),
+                    )
 
         if order.order_type == "cart":
             Cart.objects.filter(user=order.user).first().items.all().delete()

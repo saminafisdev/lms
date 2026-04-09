@@ -112,6 +112,19 @@ class Enrollment(models.Model):
         return f"{self.user.email} enrolled in {self.course.title}"
 
 
+class Bundle(models.Model):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    courses = models.ManyToManyField(Course, related_name="bundles", blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+
 class Scholarship(models.Model):
     LEVEL_CHOICES = (
         ("high school", "High School"),

@@ -14,6 +14,7 @@ from accounts.models import TeacherProfile
 from config.permissions import IsAdminRole
 from .models import (
     Course,
+    Bundle,
     Scholarship,
     CourseCategory,
     Module,
@@ -26,6 +27,7 @@ from .models import (
 )
 from .serializers import (
     CourseSerializer,
+    BundleSerializer,
     ScholarshipSerializer,
     ScholarshipDocumentSerializer,
     ApproveScholarshipSerializer,
@@ -144,6 +146,20 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+
+class BundleViewSet(viewsets.ModelViewSet):
+    serializer_class = BundleSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["is_active"]
+
+    def get_queryset(self):
+        return Bundle.objects.prefetch_related("courses").all()
+
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [permissions.IsAuthenticated()]
+        return [IsAdminRole()]
 
 
 class ScholarshipViewSet(viewsets.ModelViewSet):

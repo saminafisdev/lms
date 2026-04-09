@@ -5,6 +5,7 @@ from accounts.models import TeacherProfile
 from .models import (
     CourseCategory,
     Course,
+    Bundle,
     Scholarship,
     ScholarshipDocument,
     Module,
@@ -162,6 +163,37 @@ class SimpleCourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = ["id", "title", "thumbnail", "price", "level", "status"]
+
+
+class BundleSerializer(serializers.ModelSerializer):
+    courses_detail = SimpleCourseSerializer(source="courses", many=True, read_only=True)
+    course_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Course.objects.all(),
+        source="courses",
+        many=True,
+        write_only=True,
+        required=False,
+    )
+    original_price = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Bundle
+        fields = [
+            "id",
+            "name",
+            "description",
+            "price",
+            "original_price",
+            "courses_detail",
+            "course_ids",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def get_original_price(self, obj):
+        return sum(c.price for c in obj.courses.all())
 
 
 class ScholarshipSerializer(serializers.ModelSerializer):

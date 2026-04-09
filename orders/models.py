@@ -64,6 +64,7 @@ class Order(models.Model):
 class OrderItem(models.Model):
     ITEM_TYPE_CHOICES = (
         ("course", "Course"),
+        ("bundle", "Bundle"),
         ("digital_book", "Digital Book"),
         ("physical_book", "Physical Book"),
     )
@@ -73,6 +74,9 @@ class OrderItem(models.Model):
 
     # Only one will be set per item
     course = models.ForeignKey(Course, null=True, blank=True, on_delete=models.SET_NULL)
+    bundle = models.ForeignKey(
+        "courses.Bundle", null=True, blank=True, on_delete=models.SET_NULL
+    )
     book = models.ForeignKey(Book, null=True, blank=True, on_delete=models.SET_NULL)
 
     quantity = models.PositiveIntegerField(

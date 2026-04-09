@@ -86,10 +86,11 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class DirectPurchaseSerializer(serializers.Serializer):
-    """For buying a course or digital book directly."""
+    """For buying a course, bundle, or digital book directly."""
 
     ITEM_TYPE_CHOICES = (
         ("course", "Course"),
+        ("bundle", "Bundle"),
         ("digital_book", "Digital Book"),
     )
     item_type = serializers.ChoiceField(choices=ITEM_TYPE_CHOICES)
@@ -97,7 +98,7 @@ class DirectPurchaseSerializer(serializers.Serializer):
 
     def validate(self, data):
         from books.models import Book
-        from courses.models import Course
+        from courses.models import Bundle, Course
 
         item_type = data["item_type"]
         object_id = data["object_id"]
@@ -125,6 +126,24 @@ class DirectPurchaseSerializer(serializers.Serializer):
                 data["price"] = obj.price
                 data["scholarship"] = None
 
+        elif item_type == "bundle":
+            try:
+                obj = Bundle.objects.prefetch_related("courses").get(
+                    id=object_id, is_active=True
+                )
+            except Bundle.DoesNotExist:
+                raise serializers.ValidationError(
+                    {"object_id": "Bundle not found or inactive."}
+                )
+            already_owned = [c for c in obj.courses.all() if already_owns(user, c)]
+            if len(already_owned) == obj.courses.count():
+                raise serializers.ValidationError(
+                    "You already own all courses in this bundle."
+                )
+            data["object"] = obj
+            data["price"] = obj.price
+            data["scholarship"] = None
+
         elif item_type == "digital_book":
             try:
                 obj = Book.objects.get(id=object_id)
@@ -140,6 +159,7 @@ class DirectPurchaseSerializer(serializers.Serializer):
                 )
             data["object"] = obj
             data["price"] = obj.digital_price
+            data["scholarship"] = None
 
         return data
 

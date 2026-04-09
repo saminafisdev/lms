@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework_nested import routers
 from .views import (
     CourseViewSet,
+    BundleViewSet,
     ScholarshipViewSet,
     CourseCategoryViewSet,
     ModuleViewSet,
@@ -15,6 +16,7 @@ from .views import (
 
 router = routers.DefaultRouter()
 router.register(r"courses", CourseViewSet, basename="course")
+router.register(r"bundles", BundleViewSet, basename="bundle")
 router.register(r"scholarships", ScholarshipViewSet, basename="scholarship")
 router.register(r"course-categories", CourseCategoryViewSet)
 router.register(r"enrollments", EnrollmentViewSet, basename="enrollment")

@@ -50,6 +50,26 @@ def fetch_sendgrid_templates():
         return []
 
 
+def send_plain_email(to_email, subject, body):
+    """
+    Send a basic plain-text email via SendGrid without a dynamic template.
+    Used as a fallback when no template is configured for a purpose.
+    """
+    sg = get_sendgrid_client()
+    message = Mail(
+        from_email=Email(settings.DEFAULT_FROM_EMAIL, settings.DEFAULT_FROM_NAME),
+        to_emails=To(to_email),
+        subject=subject,
+        plain_text_content=body,
+    )
+    try:
+        sg.send(message)
+        return True
+    except Exception as e:
+        logger.error(f"SendGrid failed sending plain email to {to_email}: {e}")
+        return False
+
+
 def send_email(to_email, purpose, template_data=None):
     """
     Send a transactional email for a given purpose.
