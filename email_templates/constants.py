@@ -6,4 +6,11 @@ EMAIL_TEMPLATE_VARIABLES = {
     "blog_approved": ["first_name", "blog_title"],
     "blog_rejected": ["first_name", "blog_title", "rejection_reason"],
     "newsletter": [],
+    "certificate_issued": [
+        "first_name",
+        "course_name",
+        "certificate_id",
+        "download_url",
+        "verify_url",
+    ],
 }

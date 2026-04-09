@@ -9,6 +9,7 @@ class EmailPurpose(models.TextChoices):
     BLOG_APPROVED = "blog_approved", "Blog Post Approved"
     BLOG_REJECTED = "blog_rejected", "Blog Post Rejected"
     NEWSLETTER = "newsletter", "Newsletter"
+    CERTIFICATE_ISSUED = "certificate_issued", "Certificate Issued"
 
 
 class EmailTemplateConfig(models.Model):

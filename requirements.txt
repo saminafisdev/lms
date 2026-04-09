@@ -1,10 +1,12 @@
 asgiref==3.11.1
 attrs==25.4.0
 bleach==6.3.0
+brotli==1.2.0
 certifi==2026.2.25
 cffi==2.0.0
 charset-normalizer==3.4.4
 cryptography==46.0.5
+cssselect2==0.9.0
 defusedxml==0.7.1
 Django==6.0.2
 django-cors-headers==4.9.0
@@ -18,6 +20,7 @@ djangorestframework_simplejwt==5.5.1
 djoser==2.3.3
 drf-nested-routers==0.95.0
 drf-spectacular==0.29.0
+fonttools==4.62.1
 idna==3.11
 inflection==0.5.1
 jsonschema==4.26.0
@@ -28,7 +31,9 @@ pillow==12.1.1
 psycopg==3.3.3
 psycopg-binary==3.3.3
 pycparser==3.0
+pydyf==0.12.1
 PyJWT==2.11.0
+pyphen==0.17.2
 python-http-client==3.3.7
 python3-openid==3.2.0
 PyYAML==6.0.3
@@ -41,8 +46,12 @@ social-auth-app-django==5.7.0
 social-auth-core==4.8.5
 sqlparse==0.5.5
 stripe==15.0.1
+tinycss2==1.5.1
+tinyhtml5==2.1.0
 typing_extensions==4.15.0
 uritemplate==4.2.0
 urllib3==2.6.3
+weasyprint==68.1
 webencodings==0.5.1
 Werkzeug==3.1.8
+zopfli==0.4.1

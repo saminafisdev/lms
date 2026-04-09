@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "taggit",
     "accounts",
     "courses",
+    "certificates",
     "consultations",
     "doors",
     "books",
