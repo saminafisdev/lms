@@ -111,7 +111,19 @@ class DirectPurchaseSerializer(serializers.Serializer):
             if already_owns(user, obj):
                 raise serializers.ValidationError("You already own this course.")
             data["object"] = obj
-            data["price"] = obj.price
+
+            # Apply scholarship discount if the user has an approved one for this course
+            from courses.models import Scholarship
+            scholarship = Scholarship.objects.filter(
+                user=user, course=obj, status="approved"
+            ).first()
+            if scholarship and scholarship.discount_percent:
+                discount = scholarship.discount_percent / 100
+                data["price"] = round(obj.price * (1 - discount), 2)
+                data["scholarship"] = scholarship
+            else:
+                data["price"] = obj.price
+                data["scholarship"] = None
 
         elif item_type == "digital_book":
             try:

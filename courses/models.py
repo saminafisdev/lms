@@ -119,7 +119,19 @@ class Scholarship(models.Model):
         ("postgrad", "Postgraduate"),
         ("other", "Other"),
     )
+    STATUS_CHOICES = (
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+    )
 
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="scholarship_applications",
+    )
     course = models.ForeignKey(
         Course, on_delete=models.CASCADE, related_name="scholarships"
     )
@@ -140,8 +152,28 @@ class Scholarship(models.Model):
         default=False, verbose_name="Agree to be contacted for further discussion"
     )
 
+    # Admin-set fields
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending")
+    discount_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Discount percentage granted on approval (e.g. 50.00 for 50%)",
+    )
+    rejection_note = models.TextField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_scholarships",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
     def __str__(self):
-        return f"{self.name} - {self.course.title}"
+        return f"{self.name} - {self.course.title} ({self.status})"
 
     def clean(self):
         from django.core.exceptions import ValidationError

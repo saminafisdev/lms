@@ -1,5 +1,6 @@
 from courses.models import LessonCompletion
-from rest_framework import status
+from django.utils import timezone
+from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework import viewsets, filters
@@ -8,6 +9,7 @@ from django.db.models import Prefetch
 import django_filters
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from accounts.models import TeacherProfile
+from config.permissions import IsAdminRole
 from .models import (
     Course,
     Scholarship,
@@ -23,6 +25,8 @@ from .models import (
 from .serializers import (
     CourseSerializer,
     ScholarshipSerializer,
+    ApproveScholarshipSerializer,
+    RejectScholarshipSerializer,
     CourseCategorySerializer,
     ModuleSerializer,
     LessonSerializer,
@@ -140,8 +144,77 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
 
 
 class ScholarshipViewSet(viewsets.ModelViewSet):
-    queryset = Scholarship.objects.all()
     serializer_class = ScholarshipSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["status", "course"]
+
+    def get_queryset(self):
+        return Scholarship.objects.select_related(
+            "course", "user", "reviewed_by"
+        ).all()
+
+    def get_permissions(self):
+        if self.action == "create":
+            return [permissions.IsAuthenticated()]
+        return [IsAdminRole()]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @extend_schema(request=ApproveScholarshipSerializer, responses={200: ScholarshipSerializer})
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        """
+        POST /scholarships/{id}/approve/
+        Admin — approve a scholarship application with a discount percentage.
+        Body: { "discount_percent": 50 }
+        """
+        scholarship = self.get_object()
+
+        if scholarship.status != "pending":
+            return Response(
+                {"error": f"Cannot approve a scholarship that is already '{scholarship.status}'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = ApproveScholarshipSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        scholarship.status = "approved"
+        scholarship.discount_percent = serializer.validated_data["discount_percent"]
+        scholarship.reviewed_by = request.user
+        scholarship.reviewed_at = timezone.now()
+        scholarship.rejection_note = None
+        scholarship.save()
+
+        return Response(ScholarshipSerializer(scholarship).data)
+
+    @extend_schema(request=RejectScholarshipSerializer, responses={200: ScholarshipSerializer})
+    @action(detail=True, methods=["post"], url_path="reject")
+    def reject(self, request, pk=None):
+        """
+        POST /scholarships/{id}/reject/
+        Admin — reject a scholarship application with an optional note.
+        Body: { "rejection_note": "..." }
+        """
+        scholarship = self.get_object()
+
+        if scholarship.status != "pending":
+            return Response(
+                {"error": f"Cannot reject a scholarship that is already '{scholarship.status}'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = RejectScholarshipSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        scholarship.status = "rejected"
+        scholarship.rejection_note = serializer.validated_data.get("rejection_note", "")
+        scholarship.reviewed_by = request.user
+        scholarship.reviewed_at = timezone.now()
+        scholarship.save()
+
+        return Response(ScholarshipSerializer(scholarship).data)
 
 
 class CourseCategoryViewSet(viewsets.ModelViewSet):

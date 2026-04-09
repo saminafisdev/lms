@@ -23,9 +23,34 @@ class CourseCategorySerializer(serializers.ModelSerializer):
 
 
 class ScholarshipSerializer(serializers.ModelSerializer):
+    course_title = serializers.ReadOnlyField(source="course.title")
+    reviewed_by_email = serializers.ReadOnlyField(source="reviewed_by.email")
+
     class Meta:
         model = Scholarship
         fields = "__all__"
+        read_only_fields = [
+            "status",
+            "discount_percent",
+            "rejection_note",
+            "reviewed_by",
+            "reviewed_at",
+            "created_at",
+        ]
+
+
+class ApproveScholarshipSerializer(serializers.Serializer):
+    discount_percent = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        min_value=1,
+        max_value=100,
+        help_text="Discount percentage to grant (1–100)",
+    )
+
+
+class RejectScholarshipSerializer(serializers.Serializer):
+    rejection_note = serializers.CharField(required=False, allow_blank=True)
 
 
 class OptionSerializer(serializers.ModelSerializer):
