@@ -22,12 +22,6 @@ class CourseCategorySerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class EnrollmentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Enrollment
-        fields = "__all__"
-
-
 class ScholarshipSerializer(serializers.ModelSerializer):
     class Meta:
         model = Scholarship
@@ -146,3 +140,11 @@ class CourseSerializer(serializers.ModelSerializer):
 
     def get_total_lessons(self, obj):
         return sum(module.lessons.count() for module in obj.modules.all())
+
+
+class EnrollmentSerializer(serializers.ModelSerializer):
+    course = CourseSerializer(read_only=True)
+
+    class Meta:
+        model = Enrollment
+        fields = "__all__"
