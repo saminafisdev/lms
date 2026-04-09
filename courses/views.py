@@ -1,3 +1,7 @@
+from courses.models import LessonCompletion
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.decorators import action
 from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Prefetch
@@ -46,14 +50,13 @@ class CourseViewSet(viewsets.ModelViewSet):
     search_fields = ["title", "subtitle", "description"]
 
     def get_queryset(self):
-        base_qs = (
-            Course.objects.select_related("category", "teacher", "teacher__user")
-            .prefetch_related(
-                Prefetch("modules", queryset=Module.objects.order_by("order")),
-                Prefetch("modules__lessons", queryset=Lesson.objects.order_by("order")),
-                "modules__lessons__quiz_details__questions__options",
-                "modules__lessons__assignment_details",
-            )
+        base_qs = Course.objects.select_related(
+            "category", "teacher", "teacher__user"
+        ).prefetch_related(
+            Prefetch("modules", queryset=Module.objects.order_by("order")),
+            Prefetch("modules__lessons", queryset=Lesson.objects.order_by("order")),
+            "modules__lessons__quiz_details__questions__options",
+            "modules__lessons__assignment_details",
         )
 
         user = self.request.user
@@ -131,6 +134,43 @@ class LessonViewSet(viewsets.ModelViewSet):
             serializer.save(module_id=self.kwargs["module_pk"])
         else:
             serializer.save()
+
+    # courses/views.py
+    @action(detail=True, methods=["post"], url_path="complete")
+    def complete_lesson(self, request, pk=None):
+        """
+        POST /lessons/{id}/complete/
+        Student marks a lesson as complete.
+        """
+        lesson = self.get_object()
+
+        # Must be enrolled
+        enrollment = Enrollment.objects.filter(
+            user=request.user, course=lesson.module.course
+        ).first()
+
+        if not enrollment:
+            return Response(
+                {"error": "You are not enrolled in this course."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Mark lesson complete
+        _, created = LessonCompletion.objects.get_or_create(
+            user=request.user, lesson=lesson
+        )
+
+        # Check if course is now complete
+        course_completed = enrollment.check_completion()
+
+        return Response(
+            {
+                "lesson_completed": True,
+                "already_completed": not created,
+                "course_completed": course_completed,
+                "progress_percent": enrollment.progress_percent,
+            }
+        )
 
 
 class QuizViewSet(viewsets.ModelViewSet):

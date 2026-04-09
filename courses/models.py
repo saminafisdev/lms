@@ -72,6 +72,38 @@ class Enrollment(models.Model):
         Course, on_delete=models.CASCADE, related_name="enrollments"
     )
     enrolled_at = models.DateTimeField(auto_now_add=True)
+    is_completed = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    def check_completion(self):
+        """
+        Called after every lesson completion.
+        Marks enrollment as complete if all lessons are done.
+        """
+        from django.utils import timezone
+
+        total_lessons = Lesson.objects.filter(module__course=self.course).count()
+
+        completed_lessons = LessonCompletion.objects.filter(
+            user=self.user, lesson__module__course=self.course
+        ).count()
+
+        if total_lessons > 0 and completed_lessons >= total_lessons:
+            self.is_completed = True
+            self.completed_at = timezone.now()
+            self.save(update_fields=["is_completed", "completed_at"])
+            return True
+        return False
+
+    @property
+    def progress_percent(self):
+        total = Lesson.objects.filter(module__course=self.course).count()
+        if total == 0:
+            return 0
+        completed = LessonCompletion.objects.filter(
+            user=self.user, lesson__module__course=self.course
+        ).count()
+        return round((completed / total) * 100)
 
     class Meta:
         unique_together = ("user", "course")
@@ -215,3 +247,19 @@ class Assignment(models.Model):
 
     def __str__(self):
         return f"Assignment for {self.lesson.title}"
+
+
+class LessonCompletion(models.Model):
+    user = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="lesson_completions"
+    )
+    lesson = models.ForeignKey(
+        Lesson, on_delete=models.CASCADE, related_name="completions"
+    )
+    completed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "lesson")
+
+    def __str__(self):
+        return f"{self.user.email} completed {self.lesson.title}"
