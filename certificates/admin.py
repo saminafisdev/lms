@@ -4,8 +4,8 @@ from .models import Certificate, CertificateTemplate
 
 @admin.register(CertificateTemplate)
 class CertificateTemplateAdmin(admin.ModelAdmin):
-    list_display = ["name", "course", "created_by", "created_at"]
-    search_fields = ["name", "course__title"]
+    list_display = ["name", "created_by", "created_at"]
+    search_fields = ["name"]
     readonly_fields = ["created_at", "updated_at"]
 
 

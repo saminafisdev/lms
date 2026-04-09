@@ -4,14 +4,12 @@ from django.db import models
 
 class CertificateTemplate(models.Model):
     """
-    HTML template uploaded by admin, assigned to a course.
+    Standalone HTML template uploaded by admin.
+    Selected at certificate issuance time — not tied to a specific course.
     Placeholders: {{student_name}}, {{course_name}}, {{course_level}},
                   {{instructor_name}}, {{issue_date}}, {{certificate_id}}
     """
 
-    course = models.OneToOneField(
-        "courses.Course", on_delete=models.CASCADE, related_name="certificate_template"
-    )
     name = models.CharField(max_length=255)
     html_file = models.FileField(upload_to="certificates/templates/")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -24,7 +22,7 @@ class CertificateTemplate(models.Model):
     )
 
     def __str__(self):
-        return f"{self.name} — {self.course.title}"
+        return self.name
 
 
 class Certificate(models.Model):
@@ -40,6 +38,12 @@ class Certificate(models.Model):
     )
     enrollment = models.OneToOneField(
         "courses.Enrollment", on_delete=models.CASCADE, related_name="certificate"
+    )
+    template = models.ForeignKey(
+        CertificateTemplate,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="certificates",
     )
     certificate_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     pdf_file = models.FileField(upload_to="certificates/issued/", blank=True, null=True)

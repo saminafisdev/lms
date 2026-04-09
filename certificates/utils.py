@@ -41,9 +41,9 @@ def render_certificate_html(template, certificate):
     return html_content
 
 
-def generate_certificate_pdf(certificate):
+def generate_certificate_pdf(certificate, template):
     """
-    Generate PDF from the course's certificate template.
+    Generate PDF using the provided template.
     Saves the PDF to the certificate's pdf_file field.
     Returns True on success, False on failure.
     """
@@ -51,14 +51,6 @@ def generate_certificate_pdf(certificate):
     import logging
 
     logger = logging.getLogger(__name__)
-
-    try:
-        template = certificate.course.certificate_template
-    except Exception:
-        logger.error(
-            f"No certificate template found for course: {certificate.course.title}"
-        )
-        return False
 
     try:
         html_content = render_certificate_html(template, certificate)

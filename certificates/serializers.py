@@ -3,15 +3,12 @@ from .models import Certificate, CertificateTemplate
 
 
 class CertificateTemplateSerializer(serializers.ModelSerializer):
-    course_title = serializers.ReadOnlyField(source="course.title")
     created_by_email = serializers.ReadOnlyField(source="created_by.email")
 
     class Meta:
         model = CertificateTemplate
         fields = [
             "id",
-            "course",
-            "course_title",
             "name",
             "html_file",
             "created_by_email",
@@ -35,6 +32,7 @@ class CertificateSerializer(serializers.ModelSerializer):
     student_email = serializers.ReadOnlyField(source="student.email")
     course_title = serializers.ReadOnlyField(source="course.title")
     issued_by_email = serializers.ReadOnlyField(source="issued_by.email")
+    template_name = serializers.ReadOnlyField(source="template.name")
 
     class Meta:
         model = Certificate
@@ -44,6 +42,7 @@ class CertificateSerializer(serializers.ModelSerializer):
             "student_name",
             "student_email",
             "course_title",
+            "template_name",
             "pdf_file",
             "issued_at",
             "issued_by_email",
@@ -59,6 +58,9 @@ class IssueCertificateSerializer(serializers.Serializer):
         child=serializers.IntegerField(),
         min_length=1,
         help_text="List of enrollment IDs to issue certificates to",
+    )
+    template_id = serializers.IntegerField(
+        help_text="ID of the certificate template to use"
     )
 
 

@@ -1,5 +1,6 @@
 import logging
 from django.db import models as db_models
+from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -32,6 +33,23 @@ class CertificateTemplateViewSet(viewsets.ModelViewSet):
     queryset = CertificateTemplate.objects.select_related("course", "created_by").all()
     serializer_class = CertificateTemplateSerializer
     permission_classes = [IsAdminRole]
+
+    @extend_schema(responses={(200, "text/html"): str})
+    @action(detail=True, methods=["get"], url_path="preview")
+    def preview(self, request, pk=None):
+        """
+        GET /certificate-templates/{id}/preview/
+        Admin — returns the raw HTML template content for in-browser preview.
+        """
+        template = self.get_object()
+        try:
+            html_content = template.html_file.read().decode("utf-8")
+        except Exception:
+            return Response(
+                {"error": "Could not read template file."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return HttpResponse(html_content, content_type="text/html")
 
 
 class CertificateViewSet(viewsets.ViewSet):
@@ -116,14 +134,24 @@ class CertificateViewSet(viewsets.ViewSet):
     def issue(self, request):
         """
         POST /certificates/issue/
-        Admin — issue certificates to selected students.
-        Body: { "enrollment_ids": [1, 2, 3] }
-        Generates PDF from course template and emails the student.
+        Admin — issue certificates to selected students using a chosen template.
+        Body: { "enrollment_ids": [1, 2, 3], "template_id": 1 }
+        Generates PDF from the selected template and emails the student.
         """
         serializer = IssueCertificateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         enrollment_ids = serializer.validated_data["enrollment_ids"]
+        template_id = serializer.validated_data["template_id"]
+
+        try:
+            template = CertificateTemplate.objects.get(id=template_id)
+        except CertificateTemplate.DoesNotExist:
+            return Response(
+                {"error": "Certificate template not found."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         enrollments = Enrollment.objects.filter(
             id__in=enrollment_ids, is_completed=True
         ).select_related("user", "course", "course__teacher__user")
@@ -144,26 +172,17 @@ class CertificateViewSet(viewsets.ViewSet):
                 skipped.append(enrollment.user.email)
                 continue
 
-            # Check course has a template
-            if not hasattr(enrollment.course, "certificate_template"):
-                failed.append(
-                    {
-                        "email": enrollment.user.email,
-                        "reason": f"Course '{enrollment.course.title}' has no certificate template.",
-                    }
-                )
-                continue
-
             # Create certificate record
             cert = Certificate.objects.create(
                 student=enrollment.user,
                 course=enrollment.course,
                 enrollment=enrollment,
+                template=template,
                 issued_by=request.user,
             )
 
             # Generate PDF
-            pdf_success = generate_certificate_pdf(cert)
+            pdf_success = generate_certificate_pdf(cert, template)
             if not pdf_success:
                 failed.append(
                     {"email": enrollment.user.email, "reason": "PDF generation failed."}
@@ -172,7 +191,6 @@ class CertificateViewSet(viewsets.ViewSet):
                 continue
 
             # Send email
-            student_name = f"{cert.student.first_name} {cert.student.last_name}".strip()
             send_email(
                 to_email=cert.student.email,
                 purpose="certificate_issued",
