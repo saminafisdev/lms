@@ -6,6 +6,7 @@ from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Prefetch
 import django_filters
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from accounts.models import TeacherProfile
 from .models import (
     Course,
@@ -77,13 +78,61 @@ class CourseViewSet(viewsets.ModelViewSet):
         return base_qs.filter(is_active=True)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        summary="List enrollments",
+        parameters=[
+            OpenApiParameter(
+                name="user",
+                description="Filter by user ID (admin only)",
+                required=False,
+                type=int,
+            ),
+            OpenApiParameter(
+                name="course",
+                description="Filter by course ID",
+                required=False,
+                type=int,
+            ),
+        ],
+        responses={200: EnrollmentSerializer(many=True)},
+    ),
+    create=extend_schema(
+        summary="Enroll in a course",
+        request=EnrollmentSerializer,
+        responses={201: EnrollmentSerializer},
+    ),
+    retrieve=extend_schema(
+        summary="Get enrollment detail",
+        responses={200: EnrollmentSerializer},
+    ),
+    update=extend_schema(
+        summary="Update enrollment",
+        request=EnrollmentSerializer,
+        responses={200: EnrollmentSerializer},
+    ),
+    partial_update=extend_schema(
+        summary="Partially update enrollment",
+        request=EnrollmentSerializer,
+        responses={200: EnrollmentSerializer},
+    ),
+    destroy=extend_schema(
+        summary="Delete enrollment",
+        responses={204: None},
+    ),
+)
 class EnrollmentViewSet(viewsets.ModelViewSet):
     serializer_class = EnrollmentSerializer
 
     def get_queryset(self):
         user = self.request.user
         if user.is_staff or user.role == "admin":
-            return Enrollment.objects.all()
+            queryset = Enrollment.objects.all()
+            # Admin can filter by user id
+            user_id = self.request.query_params.get("user")
+            if user_id:
+                queryset = queryset.filter(user__id=user_id)
+            return queryset
         return Enrollment.objects.filter(user=user)
 
     def perform_create(self, serializer):
