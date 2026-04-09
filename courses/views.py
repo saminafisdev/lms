@@ -7,7 +7,9 @@ from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Prefetch
 import django_filters
-from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view, inline_serializer
+from drf_spectacular.openapi import AutoSchema
+from rest_framework import fields as drf_fields
 from accounts.models import TeacherProfile
 from config.permissions import IsAdminRole
 from .models import (
@@ -25,6 +27,7 @@ from .models import (
 from .serializers import (
     CourseSerializer,
     ScholarshipSerializer,
+    ScholarshipDocumentSerializer,
     ApproveScholarshipSerializer,
     RejectScholarshipSerializer,
     CourseCategorySerializer,
@@ -151,15 +154,84 @@ class ScholarshipViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Scholarship.objects.select_related(
             "course", "user", "reviewed_by"
-        ).all()
+        ).prefetch_related("documents").all()
 
     def get_permissions(self):
-        if self.action == "create":
+        if self.action in ("create", "upload_documents"):
             return [permissions.IsAuthenticated()]
         return [IsAdminRole()]
 
+    @extend_schema(
+        request=inline_serializer(
+            name="ScholarshipCreateRequest",
+            fields={
+                "course": drf_fields.IntegerField(),
+                "name": drf_fields.CharField(),
+                "email": drf_fields.EmailField(),
+                "phone_number": drf_fields.CharField(),
+                "address": drf_fields.CharField(),
+                "current_level_of_study": drf_fields.ChoiceField(choices=["high school", "undergrad", "postgrad", "other"]),
+                "field_of_study": drf_fields.CharField(),
+                "why_applying": drf_fields.CharField(),
+                "how_will_it_help": drf_fields.CharField(),
+                "agree_to_contact": drf_fields.BooleanField(),
+                "documents": drf_fields.ListField(
+                    child=drf_fields.FileField(),
+                    required=False,
+                    help_text="One or more supporting documents (repeat key for multiple files)",
+                ),
+            },
+        ),
+        responses={201: ScholarshipSerializer},
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        scholarship = serializer.save(user=self.request.user)
+        files = self.request.FILES.getlist("documents")
+        if files:
+            from courses.models import ScholarshipDocument
+            ScholarshipDocument.objects.bulk_create([
+                ScholarshipDocument(scholarship=scholarship, file=f) for f in files
+            ])
+
+    @extend_schema(
+        request=ScholarshipDocumentSerializer(many=True),
+        responses={201: ScholarshipDocumentSerializer(many=True)},
+    )
+    @action(detail=True, methods=["post"], url_path="documents")
+    def upload_documents(self, request, pk=None):
+        """
+        POST /scholarships/{id}/documents/
+        Student — upload one or more supporting documents.
+        Send as multipart/form-data with multiple 'file' fields.
+        """
+        scholarship = self.get_object()
+
+        if scholarship.user != request.user:
+            return Response(
+                {"error": "You can only upload documents for your own application."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        files = request.FILES.getlist("file")
+        if not files:
+            return Response(
+                {"error": "No files provided."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from courses.models import ScholarshipDocument
+        documents = [
+            ScholarshipDocument(scholarship=scholarship, file=f) for f in files
+        ]
+        ScholarshipDocument.objects.bulk_create(documents)
+        created = scholarship.documents.order_by("-uploaded_at")[:len(files)]
+        return Response(
+            ScholarshipDocumentSerializer(created, many=True).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @extend_schema(request=ApproveScholarshipSerializer, responses={200: ScholarshipSerializer})
     @action(detail=True, methods=["post"], url_path="approve")

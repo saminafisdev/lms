@@ -147,7 +147,6 @@ class Scholarship(models.Model):
     how_will_it_help = models.TextField(
         verbose_name="How will the scholarship help you achieve your goals?"
     )
-    personal_statement = models.FileField(upload_to="scholarships/statements/")
     agree_to_contact = models.BooleanField(
         default=False, verbose_name="Agree to be contacted for further discussion"
     )
@@ -182,6 +181,17 @@ class Scholarship(models.Model):
             raise ValidationError(
                 "You must agree to be contacted for further discussion."
             )
+
+
+class ScholarshipDocument(models.Model):
+    scholarship = models.ForeignKey(
+        Scholarship, on_delete=models.CASCADE, related_name="documents"
+    )
+    file = models.FileField(upload_to="scholarships/documents/")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Document for {self.scholarship}"
 
 
 class Module(models.Model):

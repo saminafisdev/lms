@@ -6,6 +6,7 @@ from .models import (
     CourseCategory,
     Course,
     Scholarship,
+    ScholarshipDocument,
     Module,
     Lesson,
     Quiz,
@@ -22,21 +23,11 @@ class CourseCategorySerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class ScholarshipSerializer(serializers.ModelSerializer):
-    course_title = serializers.ReadOnlyField(source="course.title")
-    reviewed_by_email = serializers.ReadOnlyField(source="reviewed_by.email")
-
+class ScholarshipDocumentSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Scholarship
-        fields = "__all__"
-        read_only_fields = [
-            "status",
-            "discount_percent",
-            "rejection_note",
-            "reviewed_by",
-            "reviewed_at",
-            "created_at",
-        ]
+        model = ScholarshipDocument
+        fields = ["id", "file", "uploaded_at"]
+        read_only_fields = ["id", "uploaded_at"]
 
 
 class ApproveScholarshipSerializer(serializers.Serializer):
@@ -167,8 +158,46 @@ class CourseSerializer(serializers.ModelSerializer):
         return sum(module.lessons.count() for module in obj.modules.all())
 
 
+class SimpleCourseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Course
+        fields = ["id", "title", "thumbnail", "price", "level", "status"]
+
+
+class ScholarshipSerializer(serializers.ModelSerializer):
+    course_detail = SimpleCourseSerializer(source="course", read_only=True)
+    user_detail = serializers.SerializerMethodField()
+    reviewed_by_detail = serializers.SerializerMethodField()
+    documents = ScholarshipDocumentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Scholarship
+        fields = "__all__"
+        read_only_fields = [
+            "user",
+            "status",
+            "discount_percent",
+            "rejection_note",
+            "reviewed_by",
+            "reviewed_at",
+            "created_at",
+        ]
+
+    def get_user_detail(self, obj):
+        if not obj.user:
+            return None
+        u = obj.user
+        return {"id": u.id, "email": u.email, "first_name": u.first_name, "last_name": u.last_name}
+
+    def get_reviewed_by_detail(self, obj):
+        if not obj.reviewed_by:
+            return None
+        u = obj.reviewed_by
+        return {"id": u.id, "email": u.email, "first_name": u.first_name, "last_name": u.last_name}
+
+
 class EnrollmentSerializer(serializers.ModelSerializer):
-    course = CourseSerializer(read_only=True)
+    course = SimpleCourseSerializer(read_only=True)
 
     class Meta:
         model = Enrollment
