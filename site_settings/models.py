@@ -34,3 +34,20 @@ class SiteSettings(models.Model):
 
     def __str__(self):
         return "Site Settings"
+
+
+class Testimonial(models.Model):
+    name = models.CharField(max_length=150)
+    picture = models.ImageField(upload_to="testimonials/", blank=True, null=True)
+    body = models.TextField()
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0, help_text="Controls display order (lower = first).")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["order", "-created_at"]
+        verbose_name = "Testimonial"
+        verbose_name_plural = "Testimonials"
+
+    def __str__(self):
+        return self.name

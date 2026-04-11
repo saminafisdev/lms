@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from config.fields import RichTextField
-from .models import SiteSettings
+from .models import SiteSettings, Testimonial
 
 
 class SiteSettingsSerializer(serializers.ModelSerializer):
@@ -18,3 +18,10 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["updated_at"]
+
+
+class TestimonialSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Testimonial
+        fields = ["id", "name", "picture", "body", "is_active", "order", "created_at"]
+        read_only_fields = ["created_at"]

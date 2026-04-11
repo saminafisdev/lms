@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import SiteSettings
+from .models import SiteSettings, Testimonial
 
 
 @admin.register(SiteSettings)
@@ -15,3 +15,11 @@ class SiteSettingsAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(Testimonial)
+class TestimonialAdmin(admin.ModelAdmin):
+    list_display = ("name", "is_active", "order", "created_at")
+    list_editable = ("is_active", "order")
+    list_filter = ("is_active",)
+    search_fields = ("name", "body")

@@ -2,9 +2,9 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
-from rest_framework import status
-from .models import SiteSettings
-from .serializers import SiteSettingsSerializer
+from rest_framework import status, viewsets
+from .models import SiteSettings, Testimonial
+from .serializers import SiteSettingsSerializer, TestimonialSerializer
 
 
 @extend_schema(
@@ -32,3 +32,19 @@ def site_settings_update(request):
     serializer.is_valid(raise_exception=True)
     serializer.save()
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class TestimonialViewSet(viewsets.ModelViewSet):
+    serializer_class = TestimonialSerializer
+    queryset = Testimonial.objects.all()
+
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [AllowAny()]
+        return [IsAdminUser()]
+
+    def get_queryset(self):
+        qs = Testimonial.objects.all()
+        if not (self.request.user and self.request.user.is_staff):
+            qs = qs.filter(is_active=True)
+        return qs
