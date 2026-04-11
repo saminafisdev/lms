@@ -148,7 +148,9 @@ class ConsultationPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ConsultationPurchaseSerializer
 
     def get_permissions(self):
-        return [IsAdminRole()] if self.request.user.role == "admin" else [permissions.IsAuthenticated()]
+        if getattr(self.request.user, "role", None) == "admin":
+            return [IsAdminRole()]
+        return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
