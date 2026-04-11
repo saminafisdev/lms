@@ -54,7 +54,7 @@ class DonationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
                     "purchase_type": "donation",
                     "donation_id": str(donation.id),
                 },
-                automatic_payment_methods={"enabled": True},
+                automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
             )
         except stripe.error.StripeError as e:
             donation.delete()

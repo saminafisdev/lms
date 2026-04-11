@@ -16,7 +16,7 @@ def create_payment_intent(amount, currency=None, metadata=None):
         metadata=metadata or {},
         automatic_payment_methods={
             "enabled": True,
-            # "allow_redirects": "never" # used in development
+            "allow_redirects": "never",
         },
     )
 
