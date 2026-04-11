@@ -13,6 +13,7 @@ class EmailPurpose(models.TextChoices):
     NEWSLETTER = "newsletter", "Newsletter"
     CERTIFICATE_ISSUED = "certificate_issued", "Certificate Issued"
     CONTACT = "contact", "Contact Form Submission"
+    MEMBERSHIP_PURCHASE = "membership_purchase", "Membership Purchase Confirmation"
 
 
 class EmailTemplateConfig(models.Model):

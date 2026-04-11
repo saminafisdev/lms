@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     "email_templates",
     "reviews",
     "site_settings",
+    "memberships",
 ]
 
 MIDDLEWARE = [

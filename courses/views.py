@@ -382,7 +382,13 @@ class LessonViewSet(viewsets.ModelViewSet):
             user=user, course=lesson.module.course
         ).exists()
 
-        if not lesson.is_preview and not is_enrolled and not is_admin_or_teacher:
+        has_membership = (
+            not is_enrolled
+            and hasattr(user, "membership")
+            and user.membership.is_currently_active
+        )
+
+        if not lesson.is_preview and not is_enrolled and not has_membership and not is_admin_or_teacher:
             return Response(
                 {"error": "You must be enrolled in this course to access this lesson."},
                 status=status.HTTP_403_FORBIDDEN,

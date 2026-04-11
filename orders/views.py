@@ -304,6 +304,8 @@ class StripeWebhookView(APIView):
 
         if purchase_type == "consultation":
             self._fulfill_consultation(metadata)
+        elif purchase_type == "membership":
+            self._fulfill_membership(metadata)
         else:
             order_id = metadata.get("order_id")
             if not order_id:
@@ -325,6 +327,11 @@ class StripeWebhookView(APIView):
             if purchase_id:
                 from consultations.models import ConsultationPurchase
                 ConsultationPurchase.objects.filter(id=purchase_id).update(status="failed")
+        elif purchase_type == "membership":
+            membership_id = metadata.get("membership_id")
+            if membership_id:
+                from memberships.models import UserMembership
+                UserMembership.objects.filter(id=membership_id).update(status=UserMembership.Status.FAILED)
         else:
             order_id = metadata.get("order_id")
             if not order_id:
@@ -382,6 +389,48 @@ class StripeWebhookView(APIView):
                     f"Slots: {slot_list}\n"
                     f"Amount paid: {purchase.total_price_paid}\n\n"
                     "We look forward to seeing you!"
+                ),
+            )
+
+    def _fulfill_membership(self, metadata):
+        from memberships.models import UserMembership
+        from django.utils import timezone
+        from datetime import timedelta
+
+        membership_id = metadata.get("membership_id")
+        if not membership_id:
+            return
+        try:
+            membership = UserMembership.objects.select_related("user", "plan").get(id=membership_id)
+        except UserMembership.DoesNotExist:
+            return
+
+        now = timezone.now()
+        duration = membership.plan.duration_days if membership.plan else 30
+        membership.status = UserMembership.Status.ACTIVE
+        membership.start_date = now
+        membership.end_date = now + timedelta(days=duration)
+        membership.save(update_fields=["status", "start_date", "end_date", "updated_at"])
+
+        sent = send_email(
+            to_email=membership.user.email,
+            purpose="membership_purchase",
+            template_data={
+                "first_name": membership.user.first_name or "there",
+                "plan_name": membership.plan.name if membership.plan else "Membership",
+                "end_date": membership.end_date.strftime("%Y-%m-%d"),
+            },
+        )
+        if not sent:
+            send_plain_email(
+                to_email=membership.user.email,
+                subject="Membership Activated",
+                body=(
+                    f"Hi {membership.user.first_name or 'there'},\n\n"
+                    f"Your membership has been activated.\n"
+                    f"Plan: {membership.plan.name if membership.plan else 'Membership'}\n"
+                    f"Valid until: {membership.end_date.strftime('%Y-%m-%d')}\n\n"
+                    "Enjoy unlimited access to all courses!"
                 ),
             )
 
