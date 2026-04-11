@@ -6,6 +6,7 @@ class EmailPurpose(models.TextChoices):
     PASSWORD_RESET = "password_reset", "Password Reset"
     COURSE_PURCHASE = "course_purchase", "Course Purchase Confirmation"
     BUNDLE_PURCHASE = "bundle_purchase", "Bundle Purchase Confirmation"
+    CONSULTATION_PURCHASE = "consultation_purchase", "Consultation Purchase Confirmation"
     BOOK_PURCHASE = "book_purchase", "Book Purchase Confirmation"
     BLOG_APPROVED = "blog_approved", "Blog Post Approved"
     BLOG_REJECTED = "blog_rejected", "Blog Post Rejected"

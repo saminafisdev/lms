@@ -1,13 +1,18 @@
-from rest_framework import viewsets, status
+from django.conf import settings
+from django.db import transaction
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db import transaction
-from .models import Consultation, AvailableTimeslot, Bundle, ConsultationPurchase
+
+from config.permissions import IsAdminRole
+from orders.stripe import create_payment_intent
+
+from .models import AvailableTimeslot, Bundle, Consultation, ConsultationPurchase
 from .serializers import (
-    ConsultationSerializer,
     AvailableTimeslotSerializer,
     BundleSerializer,
     ConsultationPurchaseSerializer,
+    ConsultationSerializer,
 )
 
 
@@ -19,73 +24,95 @@ class ConsultationViewSet(viewsets.ModelViewSet):
     )
     serializer_class = ConsultationSerializer
 
-    @action(detail=True, methods=["post"])
-    def book(self, request, pk=None):
-        consultation = self.get_object()
-        student = request.user
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [permissions.IsAuthenticated()]
+        if self.action == "book":
+            return [permissions.IsAuthenticated()]
+        return [IsAdminRole()]
 
-        if not student.is_authenticated:
-            return Response(
-                {"error": "Authentication required"},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
+    @action(detail=True, methods=["post"], url_path="book")
+    def book(self, request, pk=None):
+        """
+        POST /consultations/{id}/book/
+        Student selects timeslots and gets a Stripe PaymentIntent back.
+        Payment completion is handled by the webhook.
+        """
+        consultation = self.get_object()
 
         timeslot_ids = request.data.get("timeslot_ids", [])
         if not timeslot_ids:
             return Response(
-                {"error": "No timeslots selected"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        timeslots = AvailableTimeslot.objects.filter(
-            id__in=timeslot_ids, consultation=consultation, is_booked=False
-        )
-
-        if len(timeslots) != len(timeslot_ids):
-            return Response(
-                {"error": "One or more timeslots are unavailable or invalid"},
+                {"error": "No timeslots selected."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        num_sessions = len(timeslots)
-
-        # Logic for bundle
-        best_bundle = (
-            Bundle.objects.filter(
-                consultation=consultation, num_sessions__lte=num_sessions
-            )
-            .order_by("-num_sessions")
-            .first()
-        )
-
-        standard_price = consultation.standard_price
-        total_price = standard_price * num_sessions
-
-        if best_bundle:
-            discount = best_bundle.discount_percentage / 100
-            total_price = total_price * (1 - discount)
-
-
         with transaction.atomic():
+            # Lock the timeslots to prevent race conditions
+            timeslots = (
+                AvailableTimeslot.objects.select_for_update()
+                .filter(id__in=timeslot_ids, consultation=consultation, is_booked=False)
+            )
+
+            if timeslots.count() != len(timeslot_ids):
+                return Response(
+                    {"error": "One or more timeslots are unavailable or already booked."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            num_sessions = len(timeslot_ids)
+
+            # Find best bundle discount
+            best_bundle = (
+                Bundle.objects.filter(
+                    consultation=consultation, num_sessions__lte=num_sessions
+                )
+                .order_by("-num_sessions")
+                .first()
+            )
+
+            total_price = consultation.standard_price * num_sessions
+            if best_bundle:
+                discount = best_bundle.discount_percentage / 100
+                total_price = round(total_price * (1 - discount), 2)
+
+            # Create a pending purchase — slots NOT marked booked yet (done on webhook)
             purchase = ConsultationPurchase.objects.create(
-                student=student,
+                student=request.user,
                 consultation=consultation,
                 bundle_applied=best_bundle,
                 total_price_paid=total_price,
                 sessions_purchased=num_sessions,
+                status="pending",
             )
             purchase.booked_slots.set(timeslots)
 
-            # Mark timeslots as booked
-            timeslots.update(is_booked=True)
+        # Create Stripe PaymentIntent outside the transaction lock
+        intent = create_payment_intent(
+            amount=total_price,
+            metadata={
+                "purchase_type": "consultation",
+                "consultation_purchase_id": purchase.id,
+                "user_id": request.user.id,
+            },
+        )
+
+        purchase.payment_reference = intent["id"]
+        purchase.save(update_fields=["payment_reference"])
 
         return Response(
-            ConsultationPurchaseSerializer(purchase).data,
+            {
+                "purchase": ConsultationPurchaseSerializer(purchase).data,
+                "client_secret": intent["client_secret"],
+                "publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+            },
             status=status.HTTP_201_CREATED,
         )
 
 
 class AvailableTimeslotViewSet(viewsets.ModelViewSet):
     serializer_class = AvailableTimeslotSerializer
+    permission_classes = [IsAdminRole]
 
     def get_queryset(self):
         queryset = AvailableTimeslot.objects.all()
@@ -102,6 +129,7 @@ class AvailableTimeslotViewSet(viewsets.ModelViewSet):
 
 class BundleViewSet(viewsets.ModelViewSet):
     serializer_class = BundleSerializer
+    permission_classes = [IsAdminRole]
 
     def get_queryset(self):
         queryset = Bundle.objects.all()
@@ -117,8 +145,18 @@ class BundleViewSet(viewsets.ModelViewSet):
 
 
 class ConsultationPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = ConsultationPurchase.objects.all()
     serializer_class = ConsultationPurchaseSerializer
 
+    def get_permissions(self):
+        return [IsAdminRole()] if self.request.user.role == "admin" else [permissions.IsAuthenticated()]
+
     def get_queryset(self):
-        return self.queryset.filter(student=self.request.user)
+        user = self.request.user
+        if user.is_staff or getattr(user, "role", None) == "admin":
+            return ConsultationPurchase.objects.select_related(
+                "student", "consultation", "bundle_applied"
+            ).prefetch_related("booked_slots").all()
+        return ConsultationPurchase.objects.filter(student=user).select_related(
+            "consultation", "bundle_applied"
+        ).prefetch_related("booked_slots")
+

@@ -300,28 +300,90 @@ class StripeWebhookView(APIView):
 
     def _handle_payment_success(self, intent):
         metadata = getattr(intent, "metadata", {})
-        order_id = metadata["order_id"]
-        if not order_id:
-            return
-        try:
-            order = Order.objects.get(id=order_id)
-        except Order.DoesNotExist:
-            return
+        purchase_type = metadata.get("purchase_type", "order")
 
-        order.status = "completed"
-        order.save()
-        self._fulfill_order(order)
+        if purchase_type == "consultation":
+            self._fulfill_consultation(metadata)
+        else:
+            order_id = metadata.get("order_id")
+            if not order_id:
+                return
+            try:
+                order = Order.objects.get(id=order_id)
+            except Order.DoesNotExist:
+                return
+            order.status = "completed"
+            order.save()
+            self._fulfill_order(order)
 
     def _handle_payment_failed(self, intent):
-        order_id = intent["metadata"].get("order_id")
-        if not order_id:
+        metadata = getattr(intent, "metadata", {})
+        purchase_type = metadata.get("purchase_type", "order")
+
+        if purchase_type == "consultation":
+            purchase_id = metadata.get("consultation_purchase_id")
+            if purchase_id:
+                from consultations.models import ConsultationPurchase
+                ConsultationPurchase.objects.filter(id=purchase_id).update(status="failed")
+        else:
+            order_id = metadata.get("order_id")
+            if not order_id:
+                return
+            try:
+                order = Order.objects.get(id=order_id)
+                order.status = "failed"
+                order.save()
+            except Order.DoesNotExist:
+                return
+
+    def _fulfill_consultation(self, metadata):
+        from consultations.models import ConsultationPurchase
+        purchase_id = metadata.get("consultation_purchase_id")
+        if not purchase_id:
             return
         try:
-            order = Order.objects.get(id=order_id)
-            order.status = "failed"
-            order.save()
-        except Order.DoesNotExist:
+            purchase = ConsultationPurchase.objects.select_related(
+                "student", "consultation"
+            ).prefetch_related("booked_slots").get(id=purchase_id)
+        except ConsultationPurchase.DoesNotExist:
             return
+
+        purchase.status = "completed"
+        purchase.save(update_fields=["status"])
+
+        # Mark timeslots as booked now that payment is confirmed
+        purchase.booked_slots.update(is_booked=True)
+
+        # Send confirmation email — try template, fall back to plain text
+        slot_list = ", ".join(
+            f"{s.day} {s.start_time}–{s.end_time}"
+            for s in purchase.booked_slots.all()
+        )
+        sent = send_email(
+            to_email=purchase.student.email,
+            purpose="consultation_purchase",
+            template_data={
+                "first_name": purchase.student.first_name or "there",
+                "consultation_title": purchase.consultation.title,
+                "sessions": purchase.sessions_purchased,
+                "slots": slot_list,
+                "amount": str(purchase.total_price_paid),
+            },
+        )
+        if not sent:
+            send_plain_email(
+                to_email=purchase.student.email,
+                subject=f"Booking confirmed: {purchase.consultation.title}",
+                body=(
+                    f"Hi {purchase.student.first_name or 'there'},\n\n"
+                    f"Your consultation booking is confirmed.\n"
+                    f"Consultation: {purchase.consultation.title}\n"
+                    f"Sessions: {purchase.sessions_purchased}\n"
+                    f"Slots: {slot_list}\n"
+                    f"Amount paid: {purchase.total_price_paid}\n\n"
+                    "We look forward to seeing you!"
+                ),
+            )
 
     def _fulfill_order(self, order):
         for item in order.items.select_related("course", "bundle", "book").all():

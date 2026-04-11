@@ -58,6 +58,12 @@ class Bundle(models.Model):
 
 
 class ConsultationPurchase(models.Model):
+    STATUS_CHOICES = (
+        ("pending", "Pending"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
+    )
+
     student = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="consultation_purchases"
     )
@@ -69,6 +75,10 @@ class ConsultationPurchase(models.Model):
     # Financials
     total_price_paid = models.DecimalField(max_digits=10, decimal_places=2)
     sessions_purchased = models.PositiveIntegerField()
+
+    # Payment
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending")
+    payment_reference = models.CharField(max_length=255, blank=True, null=True)
 
     # The literal times selected
     booked_slots = models.ManyToManyField(AvailableTimeslot, related_name="purchases")
