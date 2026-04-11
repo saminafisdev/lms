@@ -31,6 +31,10 @@ class AvailableTimeslot(models.Model):
     end_time = models.TimeField()
     is_booked = models.BooleanField(default=False)
 
+    zoom_meeting_id = models.CharField(max_length=255, blank=True, null=True)
+    zoom_join_url = models.URLField(max_length=1000, blank=True, null=True)
+    zoom_start_url = models.URLField(max_length=1000, blank=True, null=True)
+
     def __str__(self):
         return (
             f"{self.consultation.title} - {self.day} {self.start_time}-{self.end_time}"

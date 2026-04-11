@@ -229,6 +229,7 @@ class Lesson(models.Model):
         ("quiz", "Quiz"),
         ("assignment", "Assignment"),
         ("external_link", "External Link"),
+        ("live", "Live Session"),
     )
 
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name="lessons")
@@ -246,6 +247,14 @@ class Lesson(models.Model):
         default=False, help_text="If True, this lesson is available for free preview."
     )
     order = models.PositiveIntegerField(default=0)
+
+    # Live session / Zoom fields
+    scheduled_at = models.DateTimeField(
+        null=True, blank=True, help_text="Start time for live sessions (UTC)"
+    )
+    zoom_meeting_id = models.CharField(max_length=255, blank=True, null=True)
+    zoom_join_url = models.URLField(max_length=1000, blank=True, null=True)
+    zoom_start_url = models.URLField(max_length=1000, blank=True, null=True)
 
     class Meta:
         ordering = ["order"]

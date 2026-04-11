@@ -356,7 +356,10 @@ class StripeWebhookView(APIView):
                 return
 
     def _fulfill_consultation(self, metadata):
-        from consultations.models import ConsultationPurchase
+        import datetime
+        from config.zoom import create_meeting
+        from consultations.models import AvailableTimeslot, ConsultationPurchase
+
         purchase_id = metadata.get("consultation_purchase_id")
         if not purchase_id:
             return
@@ -370,10 +373,32 @@ class StripeWebhookView(APIView):
         purchase.status = "completed"
         purchase.save(update_fields=["status"])
 
-        # Mark timeslots as booked now that payment is confirmed
-        purchase.booked_slots.update(is_booked=True)
+        # Mark timeslots as booked and create Zoom meetings
+        for slot in purchase.booked_slots.all():
+            slot.is_booked = True
+            slot.save(update_fields=["is_booked"])
 
-        # Send confirmation email — try template, fall back to plain text
+            try:
+                start_dt = datetime.datetime.combine(slot.day, slot.start_time)
+                end_dt = datetime.datetime.combine(slot.day, slot.end_time)
+                duration = max(int((end_dt - start_dt).seconds / 60), 30)
+                result = create_meeting(
+                    topic=f"Consultation: {purchase.consultation.title}",
+                    start_datetime=start_dt,
+                    duration_minutes=duration,
+                    agenda=f"Session with {purchase.student.first_name or purchase.student.email}",
+                )
+                AvailableTimeslot.objects.filter(pk=slot.pk).update(
+                    zoom_meeting_id=result["meeting_id"],
+                    zoom_join_url=result["join_url"],
+                    zoom_start_url=result["start_url"],
+                )
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    f"Failed to create Zoom meeting for slot {slot.pk}: {e}"
+                )
+
+        # Send confirmation email
         slot_list = ", ".join(
             f"{s.day} {s.start_time}–{s.end_time}"
             for s in purchase.booked_slots.all()

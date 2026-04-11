@@ -82,10 +82,23 @@ class LessonSerializer(serializers.ModelSerializer):
     quiz_details = QuizSerializer(read_only=True)
     assignment_details = AssignmentSerializer(read_only=True)
     is_accessible = serializers.SerializerMethodField()
+    zoom_start_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Lesson
         fields = "__all__"
+
+    def get_zoom_start_url(self, obj):
+        """Only expose the host start URL to admins and teachers."""
+        request = self.context.get("request")
+        user = request.user if request else None
+        if not user or not user.is_authenticated:
+            return None
+        if user.is_staff or getattr(user, "role", None) == "admin":
+            return obj.zoom_start_url
+        if obj.module.course.teacher and obj.module.course.teacher.user == user:
+            return obj.zoom_start_url
+        return None
 
     def get_is_accessible(self, obj):
         request = self.context.get("request")
@@ -113,6 +126,8 @@ class LessonSerializer(serializers.ModelSerializer):
             data["video_content"] = None
             data["quiz_details"] = None
             data["assignment_details"] = None
+            data["zoom_join_url"] = None
+            data["zoom_start_url"] = None
 
         return data
 

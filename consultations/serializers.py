@@ -4,9 +4,20 @@ from .models import Consultation, AvailableTimeslot, Bundle, ConsultationPurchas
 
 
 class AvailableTimeslotSerializer(serializers.ModelSerializer):
+    zoom_start_url = serializers.SerializerMethodField()
+
     class Meta:
         model = AvailableTimeslot
         fields = "__all__"
+
+    def get_zoom_start_url(self, obj):
+        request = self.context.get("request")
+        user = request.user if request else None
+        if user and user.is_authenticated and (
+            user.is_staff or getattr(user, "role", None) in ("admin", "teacher")
+        ):
+            return obj.zoom_start_url
+        return None
 
 
 class BundleSerializer(serializers.ModelSerializer):
