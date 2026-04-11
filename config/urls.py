@@ -25,12 +25,14 @@ from drf_spectacular.views import (
 )
 from debug_toolbar.toolbar import debug_toolbar_urls
 from config.choices import choices_view
+from config.contact import contact_view
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("auth/", include("djoser.urls")),
     path("auth/", include("djoser.urls.jwt")),
     path("choices/", choices_view, name="choices"),
+    path("contact/", contact_view, name="contact"),
     path("", include("accounts.urls")),
     path("", include("courses.urls")),
     path("", include("consultations.urls")),
