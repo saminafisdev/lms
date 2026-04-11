@@ -45,3 +45,16 @@ def create_zoom_meeting_for_slot_task(self, slot_id, consultation_title, student
     except Exception as exc:
         logger.error(f"Zoom task failed for slot {slot_id}: {exc}")
         raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=30)
+def delete_bunny_video_task(self, video_id):
+    """Delete a video from Bunny Stream asynchronously."""
+    try:
+        from config.bunny_stream import delete_video
+        result = delete_video(video_id)
+        logger.info(f"Deleted Bunny video {video_id}: {result}")
+        return result
+    except Exception as exc:
+        logger.error(f"Failed to delete Bunny video {video_id}: {exc}")
+        raise self.retry(exc=exc)

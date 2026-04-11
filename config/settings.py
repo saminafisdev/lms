@@ -201,6 +201,31 @@ INTERNAL_IPS = [
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# BUNNY.NET CONFIG
+BUNNY_STORAGE_ZONE = env("BUNNY_STORAGE_ZONE", default="")
+BUNNY_STORAGE_API_KEY = env("BUNNY_STORAGE_API_KEY", default="")
+BUNNY_CDN_HOSTNAME = env("BUNNY_CDN_HOSTNAME", default="")
+BUNNY_STREAM_LIBRARY_ID = env.int("BUNNY_STREAM_LIBRARY_ID", default=0)
+BUNNY_STREAM_API_KEY = env("BUNNY_STREAM_API_KEY", default="")
+
+# Enabled by default in production (DEBUG=False); override with USE_BUNNY_STORAGE env var.
+USE_BUNNY_STORAGE = env.bool("USE_BUNNY_STORAGE", default=not DEBUG)
+
+if USE_BUNNY_STORAGE:
+    # Flat settings read by django-bunny's BunnyStorage
+    BUNNY_USERNAME = BUNNY_STORAGE_ZONE
+    BUNNY_PASSWORD = BUNNY_STORAGE_API_KEY
+    BUNNY_HOSTNAME = BUNNY_CDN_HOSTNAME
+
+    STORAGES = {
+        "default": {
+            "BACKEND": "django_bunny.storage.BunnyStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+
 
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True

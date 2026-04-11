@@ -11,6 +11,7 @@ cssselect2==0.9.0
 defusedxml==0.7.1
 django-redis==6.0.0
 Django==6.0.2
+django-bunny==1.1.6
 django-cors-headers==4.9.0
 django-debug-toolbar==6.2.0
 django-environ==0.13.0

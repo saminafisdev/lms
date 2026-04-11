@@ -1,4 +1,5 @@
 from courses.models import LessonCompletion
+from django.conf import settings
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -522,6 +523,66 @@ class LessonViewSet(viewsets.ModelViewSet):
             "url": lesson.zoom_join_url,
             "scheduled_at": lesson.scheduled_at,
         })
+
+    @action(detail=True, methods=["post"], url_path="video-upload-url")
+    def video_upload_url(self, request, *args, **kwargs):
+        """
+        Create a Bunny Stream video entry and return upload credentials.
+        The frontend then uploads the video file directly to Bunny via a PUT request.
+        Returns: {video_id, upload_url, upload_method, upload_headers, instructions}
+        POST body: {"title": "optional custom title"}
+        """
+        lesson = self.get_object()
+        user = request.user
+        if not (user.is_staff or getattr(user, "role", None) in ("admin", "teacher")):
+            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        from config.bunny_stream import create_video, delete_video
+
+        if lesson.bunny_video_id:
+            delete_video(lesson.bunny_video_id)
+
+        title = request.data.get("title") or lesson.title
+        try:
+            result = create_video(title)
+        except Exception as e:
+            return Response({"detail": f"Failed to create video: {e}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+        lesson.bunny_video_id = result["video_id"]
+        lesson.bunny_video_status = "queued"
+        lesson.save(update_fields=["bunny_video_id", "bunny_video_status"])
+
+        return Response({
+            "video_id": result["video_id"],
+            "upload_url": result["upload_url"],
+            "upload_method": "PUT",
+            "upload_headers": {
+                "AccessKey": settings.BUNNY_STREAM_API_KEY,
+                "Content-Type": "video/*",
+            },
+            "instructions": "PUT the raw video file to upload_url with the provided headers.",
+        })
+
+    @action(detail=True, methods=["get"], url_path="video-status")
+    def video_status(self, request, *args, **kwargs):
+        """
+        Get the current encoding status of the lesson's Bunny Stream video.
+        """
+        lesson = self.get_object()
+        if not lesson.bunny_video_id:
+            return Response({"status": "none", "status_label": "no video uploaded"})
+
+        from config.bunny_stream import get_video
+        try:
+            info = get_video(lesson.bunny_video_id)
+        except Exception as e:
+            return Response({"detail": f"Failed to get video status: {e}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+        if info["status_label"] != lesson.bunny_video_status:
+            lesson.bunny_video_status = info["status_label"]
+            lesson.save(update_fields=["bunny_video_status"])
+
+        return Response(info)
 
     # courses/views.py
     @action(detail=True, methods=["post"], url_path="complete")

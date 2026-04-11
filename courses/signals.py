@@ -96,3 +96,7 @@ def lesson_post_delete(sender, instance, **kwargs):
             logger.info(f"Zoom meeting {instance.zoom_meeting_id} deleted for Lesson {instance.pk}")
         except Exception as e:
             logger.warning(f"Could not delete Zoom meeting {instance.zoom_meeting_id}: {e}")
+
+    if instance.bunny_video_id:
+        from config.tasks import delete_bunny_video_task
+        delete_bunny_video_task.delay(instance.bunny_video_id)

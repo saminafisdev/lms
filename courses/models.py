@@ -252,6 +252,10 @@ class Lesson(models.Model):
     )
     order = models.PositiveIntegerField(default=0)
 
+    # Bunny Stream video fields
+    bunny_video_id = models.CharField(max_length=100, blank=True, default="")
+    bunny_video_status = models.CharField(max_length=20, blank=True, default="")
+
     # Live session / Zoom fields
     scheduled_at = models.DateTimeField(
         null=True, blank=True, help_text="Start time for live sessions (UTC)"

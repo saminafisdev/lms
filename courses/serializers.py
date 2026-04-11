@@ -1,6 +1,7 @@
 from config.fields import RichTextField
 from config.mixins import SlugMixin
 from rest_framework import serializers
+from django.conf import settings
 from accounts.serializers import TeacherProfileSerializer
 from accounts.models import TeacherProfile
 from .models import (
@@ -84,6 +85,7 @@ class LessonSerializer(serializers.ModelSerializer):
     assignment_details = AssignmentSerializer(read_only=True)
     is_accessible = serializers.SerializerMethodField()
     zoom_start_url = serializers.SerializerMethodField()
+    bunny_embed_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Lesson
@@ -100,6 +102,12 @@ class LessonSerializer(serializers.ModelSerializer):
         if obj.module.course.teacher and obj.module.course.teacher.user == user:
             return obj.zoom_start_url
         return None
+
+    def get_bunny_embed_url(self, obj):
+        if not obj.bunny_video_id:
+            return None
+        library_id = settings.BUNNY_STREAM_LIBRARY_ID
+        return f"https://iframe.mediadelivery.net/embed/{library_id}/{obj.bunny_video_id}"
 
     def get_is_accessible(self, obj):
         request = self.context.get("request")
@@ -139,6 +147,7 @@ class LessonSerializer(serializers.ModelSerializer):
             data["assignment_details"] = None
             data["zoom_join_url"] = None
             data["zoom_start_url"] = None
+            data["bunny_embed_url"] = None
 
         return data
 
