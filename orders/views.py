@@ -307,7 +307,8 @@ class StripeWebhookView(APIView):
         return Response({"status": "ok"})
 
     def _handle_payment_success(self, intent):
-        metadata = dict(getattr(intent, "metadata", {}) or {})
+        metadata_raw = getattr(intent, "metadata", None)
+        metadata = getattr(metadata_raw, "_data", None) or {}
         purchase_type = metadata.get("purchase_type", "order")
 
         if purchase_type == "consultation":
@@ -329,7 +330,8 @@ class StripeWebhookView(APIView):
             self._fulfill_order(order)
 
     def _handle_payment_failed(self, intent):
-        metadata = dict(getattr(intent, "metadata", {}) or {})
+        metadata_raw = getattr(intent, "metadata", None)
+        metadata = getattr(metadata_raw, "_data", None) or {}
         purchase_type = metadata.get("purchase_type", "order")
 
         if purchase_type == "consultation":
