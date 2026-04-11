@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     "videos",
     "email_templates",
     "reviews",
+    "site_settings",
 ]
 
 MIDDLEWARE = [
