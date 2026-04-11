@@ -403,6 +403,62 @@ class LessonViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
+
+    @action(detail=True, methods=["get"], url_path="zoom-link", permission_classes=[permissions.IsAuthenticated])
+    def zoom_link(self, request, pk=None, **kwargs):
+        """
+        GET /lessons/{id}/zoom-link/
+        Returns the Zoom link for a live lesson.
+        - Teacher/admin: gets a fresh start_url (host link) fetched live from Zoom.
+        - Student: gets the join_url (attendee link).
+        """
+        lesson = self.get_object()
+
+        if lesson.content_type != "live":
+            return Response({"error": "This lesson is not a live session."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not lesson.zoom_meeting_id:
+            return Response({"error": "No Zoom meeting has been created for this lesson yet."}, status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+        is_host = (
+            user.is_staff
+            or getattr(user, "role", None) == "admin"
+            or (lesson.module.course.teacher and lesson.module.course.teacher.user == user)
+        )
+
+        if is_host:
+            # Fetch a fresh start_url — the stored one expires after ~2 hours
+            try:
+                import requests as http_requests
+                from config.zoom import _headers
+                resp = http_requests.get(
+                    f"https://api.zoom.us/v2/meetings/{lesson.zoom_meeting_id}",
+                    headers=_headers(),
+                    timeout=10,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return Response({
+                    "type": "host",
+                    "url": data["start_url"],
+                    "scheduled_at": lesson.scheduled_at,
+                })
+            except Exception as e:
+                return Response({"error": f"Could not fetch Zoom meeting: {e}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+        # Student — check access first
+        is_enrolled = Enrollment.objects.filter(user=user, course=lesson.module.course).exists()
+        has_membership = hasattr(user, "membership") and user.membership.is_currently_active
+        if not is_enrolled and not has_membership and not lesson.is_preview:
+            return Response({"error": "You must be enrolled to access this lesson."}, status=status.HTTP_403_FORBIDDEN)
+
+        return Response({
+            "type": "attendee",
+            "url": lesson.zoom_join_url,
+            "scheduled_at": lesson.scheduled_at,
+        })
+
     # courses/views.py
     @action(detail=True, methods=["post"], url_path="complete")
     def complete_lesson(self, request, pk=None):
