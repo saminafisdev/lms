@@ -292,9 +292,17 @@ class StripeWebhookView(APIView):
             )
 
         if event["type"] == "payment_intent.succeeded":
-            self._handle_payment_success(event["data"]["object"])
+            try:
+                self._handle_payment_success(event["data"]["object"])
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Webhook fulfillment error: {e}", exc_info=True)
         elif event["type"] == "payment_intent.payment_failed":
-            self._handle_payment_failed(event["data"]["object"])
+            try:
+                self._handle_payment_failed(event["data"]["object"])
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Webhook failure handler error: {e}", exc_info=True)
 
         return Response({"status": "ok"})
 
