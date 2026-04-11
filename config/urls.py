@@ -46,6 +46,7 @@ urlpatterns = [
     path("", include("reviews.urls")),
     path("", include("site_settings.urls")),
     path("", include("memberships.urls")),
+    path("", include("donations.urls")),
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
         "docs/",

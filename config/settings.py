@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     "reviews",
     "site_settings",
     "memberships",
+    "donations",
 ]
 
 MIDDLEWARE = [

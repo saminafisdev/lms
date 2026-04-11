@@ -306,6 +306,8 @@ class StripeWebhookView(APIView):
             self._fulfill_consultation(metadata)
         elif purchase_type == "membership":
             self._fulfill_membership(metadata)
+        elif purchase_type == "donation":
+            self._fulfill_donation(metadata)
         else:
             order_id = metadata.get("order_id")
             if not order_id:
@@ -433,6 +435,13 @@ class StripeWebhookView(APIView):
                     "Enjoy unlimited access to all courses!"
                 ),
             )
+
+    def _fulfill_donation(self, metadata):
+        from donations.models import Donation
+        donation_id = metadata.get("donation_id")
+        if not donation_id:
+            return
+        Donation.objects.filter(id=donation_id).update(status=Donation.Status.COMPLETED)
 
     def _fulfill_order(self, order):
         for item in order.items.select_related("course", "bundle", "book").all():
