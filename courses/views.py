@@ -86,6 +86,28 @@ class CourseViewSet(viewsets.ModelViewSet):
         # Students (and any other role) see only active courses
         return base_qs.filter(is_active=True)
 
+    @action(detail=True, methods=["get"], url_path="certificate", permission_classes=[permissions.IsAuthenticated])
+    def certificate(self, request, pk=None):
+        """
+        GET /courses/{id}/certificate/
+        Student — retrieve their issued certificate for this course.
+        Returns the certificate details and PDF download URL.
+        """
+        from certificates.models import Certificate
+        from certificates.serializers import CertificateSerializer
+
+        course = self.get_object()
+        try:
+            cert = Certificate.objects.select_related("course", "template").get(
+                student=request.user, course=course
+            )
+        except Certificate.DoesNotExist:
+            return Response(
+                {"detail": "No certificate has been issued for this course yet."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(CertificateSerializer(cert).data)
+
 
 @extend_schema_view(
     list=extend_schema(
