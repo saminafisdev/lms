@@ -26,11 +26,17 @@ class SiteSettings(models.Model):
             if value:
                 setattr(self, field, sanitize_html(value))
         super().save(*args, **kwargs)
+        from django.core.cache import cache
+        cache.delete('site_settings')
 
     @classmethod
     def get(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
-        return obj
+        from django.core.cache import cache
+        cached = cache.get('site_settings')
+        if cached is None:
+            cached, _ = cls.objects.get_or_create(pk=1)
+            cache.set('site_settings', cached, 60 * 60 * 6)  # 6 hours
+        return cached
 
     def __str__(self):
         return "Site Settings"

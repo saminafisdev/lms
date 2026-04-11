@@ -227,3 +227,24 @@ ZOOM_ACCOUNT_ID = env("ZOOM_ACCOUNT_ID")
 ZOOM_CLIENT_ID = env("ZOOM_CLIENT_ID")
 ZOOM_CLIENT_SECRET = env("ZOOM_CLIENT_SECRET")
 ZOOM_HOST_EMAIL = env("ZOOM_HOST_EMAIL")
+
+# CACHE CONFIG
+REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+        "KEY_PREFIX": "zahra",
+    }
+}
+
+# CELERY CONFIG
+CELERY_BROKER_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
+CELERY_RESULT_BACKEND = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "UTC"

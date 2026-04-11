@@ -27,6 +27,7 @@ from .models import (
 )
 from .serializers import (
     CourseSerializer,
+    CourseListSerializer,
     BundleSerializer,
     ScholarshipSerializer,
     ScholarshipDocumentSerializer,
@@ -59,20 +60,45 @@ class CourseViewSet(viewsets.ModelViewSet):
     filterset_class = CourseFilter
     search_fields = ["title", "subtitle", "description"]
 
-    def get_queryset(self):
-        base_qs = Course.objects.select_related(
-            "category", "teacher", "teacher__user"
-        ).prefetch_related(
-            Prefetch("modules", queryset=Module.objects.order_by("order")),
-            Prefetch("modules__lessons", queryset=Lesson.objects.order_by("order")),
-            "modules__lessons__quiz_details__questions__options",
-            "modules__lessons__assignment_details",
-        )
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return CourseListSerializer
+        return CourseSerializer
 
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        user = self.request.user
+        if user.is_authenticated:
+            ctx['enrolled_course_ids'] = set(
+                Enrollment.objects.filter(user=user).values_list('course_id', flat=True)
+            )
+            ctx['has_active_membership'] = (
+                hasattr(user, 'membership') and user.membership.is_currently_active
+            )
+        else:
+            ctx['enrolled_course_ids'] = set()
+            ctx['has_active_membership'] = False
+        return ctx
+
+    def get_queryset(self):
+        from django.db.models import Count
         user = self.request.user
 
+        if self.action == 'list':
+            base_qs = Course.objects.select_related(
+                "category", "teacher", "teacher__user"
+            ).annotate(total_lessons_count=Count('modules__lessons', distinct=True))
+        else:
+            base_qs = Course.objects.select_related(
+                "category", "teacher", "teacher__user"
+            ).prefetch_related(
+                Prefetch("modules", queryset=Module.objects.order_by("order")),
+                Prefetch("modules__lessons", queryset=Lesson.objects.order_by("order")),
+                "modules__lessons__quiz_details__questions__options",
+                "modules__lessons__assignment_details",
+            )
+
         if not user.is_authenticated:
-            # Unauthenticated users see only active courses
             return base_qs.filter(is_active=True)
 
         role = getattr(user, "role", None)
@@ -83,7 +109,6 @@ class CourseViewSet(viewsets.ModelViewSet):
         if role == "teacher":
             return base_qs.filter(teacher__user=user)
 
-        # Students (and any other role) see only active courses
         return base_qs.filter(is_active=True)
 
     @action(detail=True, methods=["get"], url_path="certificate", permission_classes=[permissions.IsAuthenticated])
@@ -331,6 +356,30 @@ class CourseCategoryViewSet(viewsets.ModelViewSet):
     queryset = CourseCategory.objects.all()
     serializer_class = CourseCategorySerializer
 
+    def get_queryset(self):
+        from django.core.cache import cache
+        cached = cache.get('course_categories')
+        if cached is None:
+            cached = list(CourseCategory.objects.all())
+            cache.set('course_categories', cached, 60 * 60 * 24)  # 24 hours
+        return cached
+
+    def _invalidate_category_cache(self):
+        from django.core.cache import cache
+        cache.delete('course_categories')
+
+    def perform_create(self, serializer):
+        serializer.save()
+        self._invalidate_category_cache()
+
+    def perform_update(self, serializer):
+        serializer.save()
+        self._invalidate_category_cache()
+
+    def perform_destroy(self, instance):
+        instance.delete()
+        self._invalidate_category_cache()
+
 
 class ModuleViewSet(viewsets.ModelViewSet):
     serializer_class = ModuleSerializer
@@ -360,6 +409,21 @@ class LessonViewSet(viewsets.ModelViewSet):
         if "module_pk" in self.kwargs:
             queryset = queryset.filter(module_id=self.kwargs["module_pk"])
         return queryset
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        user = self.request.user
+        if user.is_authenticated:
+            ctx['enrolled_course_ids'] = set(
+                Enrollment.objects.filter(user=user).values_list('course_id', flat=True)
+            )
+            ctx['has_active_membership'] = (
+                hasattr(user, 'membership') and user.membership.is_currently_active
+            )
+        else:
+            ctx['enrolled_course_ids'] = set()
+            ctx['has_active_membership'] = False
+        return ctx
 
     def get_permissions(self):
         if self.action in ("create", "update", "partial_update", "destroy"):

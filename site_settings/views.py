@@ -44,7 +44,27 @@ class TestimonialViewSet(viewsets.ModelViewSet):
         return [IsAdminUser()]
 
     def get_queryset(self):
-        qs = Testimonial.objects.all()
-        if not (self.request.user and self.request.user.is_staff):
-            qs = qs.filter(is_active=True)
-        return qs
+        if self.action == 'list':
+            from django.core.cache import cache
+            cached = cache.get('testimonials_active')
+            if cached is None:
+                cached = list(Testimonial.objects.filter(is_active=True).order_by('order'))
+                cache.set('testimonials_active', cached, 60 * 60 * 24)  # 24 hours
+            return cached
+        return Testimonial.objects.all().order_by('order')
+
+    def _invalidate_testimonial_cache(self):
+        from django.core.cache import cache
+        cache.delete('testimonials_active')
+
+    def perform_create(self, serializer):
+        serializer.save()
+        self._invalidate_testimonial_cache()
+
+    def perform_update(self, serializer):
+        serializer.save()
+        self._invalidate_testimonial_cache()
+
+    def perform_destroy(self, instance):
+        instance.delete()
+        self._invalidate_testimonial_cache()

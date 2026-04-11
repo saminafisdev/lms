@@ -17,6 +17,7 @@ from .models import (
     Assignment,
     Enrollment,
 )
+from courses.models import Lesson as LessonModel
 
 
 class CourseCategorySerializer(serializers.ModelSerializer):
@@ -106,12 +107,22 @@ class LessonSerializer(serializers.ModelSerializer):
 
         if not user or not user.is_authenticated:
             return obj.is_preview
-        if user.is_staff or user.role == "admin":
+        if user.is_staff or getattr(user, "role", None) == "admin":
             return True
         if obj.module.course.teacher and obj.module.course.teacher.user == user:
             return True
+
+        # Use pre-fetched enrollment set from context (avoids N+1)
+        enrolled_course_ids = self.context.get("enrolled_course_ids")
+        has_active_membership = self.context.get("has_active_membership", False)
+        if enrolled_course_ids is not None:
+            return obj.is_preview or has_active_membership or (obj.module.course_id in enrolled_course_ids)
+
+        # Fallback for contexts without pre-fetched enrollments
+        has_membership = hasattr(user, 'membership') and user.membership.is_currently_active
         return (
             obj.is_preview
+            or has_membership
             or Enrollment.objects.filter(user=user, course=obj.module.course).exists()
         )
 
@@ -134,7 +145,7 @@ class LessonSerializer(serializers.ModelSerializer):
 
 class ModuleSerializer(serializers.ModelSerializer):
     lessons = LessonSerializer(many=True, read_only=True)
-    total_lessons = serializers.IntegerField(source="lessons.count", read_only=True)
+    total_lessons = serializers.SerializerMethodField()
     total_duration = serializers.SerializerMethodField()
 
     class Meta:
@@ -142,8 +153,41 @@ class ModuleSerializer(serializers.ModelSerializer):
         fields = "__all__"
         extra_kwargs = {"course": {"required": False}}
 
+    def get_total_lessons(self, obj):
+        return len(list(obj.lessons.all()))
+
     def get_total_duration(self, obj):
         return sum(lesson.duration_in_minutes for lesson in obj.lessons.all())
+
+
+class CourseListSerializer(SlugMixin, serializers.ModelSerializer):
+    """Lightweight serializer for course list views — no nested modules/lessons."""
+    category = CourseCategorySerializer(read_only=True)
+    teacher = TeacherProfileSerializer(read_only=True)
+    total_lessons = serializers.SerializerMethodField()
+    is_enrolled = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Course
+        fields = [
+            "id", "title", "slug", "thumbnail", "price", "level", "status",
+            "is_active", "category", "teacher", "total_lessons", "is_enrolled",
+            "created_at", "updated_at",
+        ]
+
+    def get_total_lessons(self, obj):
+        if hasattr(obj, 'total_lessons_count'):
+            return obj.total_lessons_count
+        return LessonModel.objects.filter(module__course=obj).count()
+
+    def get_is_enrolled(self, obj):
+        enrolled_course_ids = self.context.get("enrolled_course_ids")
+        if enrolled_course_ids is not None:
+            return obj.pk in enrolled_course_ids
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return Enrollment.objects.filter(user=request.user, course=obj).exists()
 
 
 class CourseSerializer(SlugMixin, serializers.ModelSerializer):
@@ -172,7 +216,9 @@ class CourseSerializer(SlugMixin, serializers.ModelSerializer):
         fields = "__all__"
 
     def get_total_lessons(self, obj):
-        return sum(module.lessons.count() for module in obj.modules.all())
+        if hasattr(obj, 'total_lessons_count'):
+            return obj.total_lessons_count
+        return LessonModel.objects.filter(module__course=obj).count()
 
 
 class SimpleCourseSerializer(serializers.ModelSerializer):

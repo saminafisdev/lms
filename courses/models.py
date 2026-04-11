@@ -109,6 +109,10 @@ class Enrollment(models.Model):
 
     class Meta:
         unique_together = ("user", "course")
+        indexes = [
+            models.Index(fields=["user"], name="enrollment_user_idx"),
+            models.Index(fields=["user", "is_completed"], name="enrollment_user_completed_idx"),
+        ]
 
     def __str__(self):
         return f"{self.user.email} enrolled in {self.course.title}"

@@ -59,6 +59,10 @@ class Order(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user"], name="order_user_idx"),
+            models.Index(fields=["user", "status"], name="order_user_status_idx"),
+        ]
 
 
 class OrderItem(models.Model):

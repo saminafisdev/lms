@@ -25,14 +25,20 @@ class MembershipPlan(models.Model):
     def save(self, *args, **kwargs):
         self.pk = 1
         super().save(*args, **kwargs)
+        from django.core.cache import cache
+        cache.delete('membership_plan')
 
     @classmethod
     def get(cls):
-        obj, _ = cls.objects.get_or_create(
-            pk=1,
-            defaults={"price": 0, "name": "Membership"},
-        )
-        return obj
+        from django.core.cache import cache
+        cached = cache.get('membership_plan')
+        if cached is None:
+            cached, _ = cls.objects.get_or_create(
+                pk=1,
+                defaults={"price": 0, "name": "Membership"},
+            )
+            cache.set('membership_plan', cached, 60 * 60 * 24)  # 24 hours
+        return cached
 
     def __str__(self):
         return f"{self.name} ({self.duration_days} days — ${self.price})"

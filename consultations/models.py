@@ -42,6 +42,10 @@ class AvailableTimeslot(models.Model):
 
     class Meta:
         ordering = ["day", "start_time"]
+        indexes = [
+            models.Index(fields=["consultation", "is_booked"], name="ts_consult_booked_idx"),
+            models.Index(fields=["day", "is_booked"], name="ts_day_booked_idx"),
+        ]
 
 
 class Bundle(models.Model):
@@ -88,6 +92,11 @@ class ConsultationPurchase(models.Model):
     booked_slots = models.ManyToManyField(AvailableTimeslot, related_name="purchases")
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["student", "status"], name="purchase_stu_status_idx"),
+        ]
 
     def __str__(self):
         return f"Purchase by {self.student.email} for {self.consultation.title}"
