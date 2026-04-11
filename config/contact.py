@@ -1,4 +1,5 @@
 from django.conf import settings
+from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -13,6 +14,11 @@ class ContactSerializer(serializers.Serializer):
     message = serializers.CharField()
 
 
+@extend_schema(
+    request=ContactSerializer,
+    responses={200: {"type": "object", "properties": {"detail": {"type": "string"}}}},
+    description="Submit a contact form. The message is forwarded to the site admin via email.",
+)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def contact_view(request):
