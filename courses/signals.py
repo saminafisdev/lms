@@ -62,6 +62,10 @@ def lesson_post_save(sender, instance, created, **kwargs):
                     zoom_join_url=result["join_url"],
                     zoom_start_url=result["start_url"],
                 )
+                # Also update in-memory so the API response reflects the new values
+                instance.zoom_meeting_id = result["meeting_id"]
+                instance.zoom_join_url = result["join_url"]
+                instance.zoom_start_url = result["start_url"]
                 logger.info(f"Zoom meeting created for Lesson {instance.pk}: {result['meeting_id']}")
             except Exception as e:
                 logger.error(f"Failed to create Zoom meeting for Lesson {instance.pk}: {e}")
@@ -78,6 +82,9 @@ def lesson_post_save(sender, instance, created, **kwargs):
                 zoom_join_url=None,
                 zoom_start_url=None,
             )
+            instance.zoom_meeting_id = None
+            instance.zoom_join_url = None
+            instance.zoom_start_url = None
 
 
 @receiver(post_delete, sender=Lesson)
