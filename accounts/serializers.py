@@ -49,6 +49,8 @@ class CustomUserSerializer(UserSerializer):
 
 class TeacherProfileSerializer(serializers.ModelSerializer):
     user = CustomUserCreateSerializer()
+    courses = serializers.SerializerMethodField()
+    consultations = serializers.SerializerMethodField()
 
     class Meta:
         model = TeacherProfile
@@ -62,7 +64,24 @@ class TeacherProfileSerializer(serializers.ModelSerializer):
             "education",
             "achievements",
             "consultation_rate",
+            "offers_consultations",
+            "courses",
+            "consultations",
         ]
+
+    def get_courses(self, obj):
+        from courses.serializers import SimpleCourseSerializer
+        return SimpleCourseSerializer(
+            obj.courses.filter(is_active=True), many=True, context=self.context
+        ).data
+
+    def get_consultations(self, obj):
+        from consultations.serializers import ConsultationSerializer
+        return ConsultationSerializer(
+            obj.consultations.prefetch_related("timeslots", "bundles"),
+            many=True,
+            context=self.context,
+        ).data
 
     def create(self, validated_data):
         user_data = validated_data.pop("user")

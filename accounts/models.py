@@ -88,6 +88,10 @@ class TeacherProfile(models.Model):
     consultation_rate = models.DecimalField(
         max_digits=10, decimal_places=2, default=0.00
     )
+    offers_consultations = models.BooleanField(
+        default=False,
+        help_text="Whether this teacher offers consultation sessions",
+    )
 
     def __str__(self):
         return f"{self.user.email} - Teacher Profile"

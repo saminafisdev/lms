@@ -19,7 +19,7 @@ class TeacherProfileViewSet(viewsets.ModelViewSet):
     queryset = TeacherProfile.objects.all()
     serializer_class = TeacherProfileSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ["professional_title", "location"]
+    filterset_fields = ["professional_title", "location", "offers_consultations"]
     search_fields = [
         "user__first_name",
         "user__last_name",
