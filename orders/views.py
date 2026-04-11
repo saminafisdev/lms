@@ -1,3 +1,4 @@
+import logging
 import stripe as stripe_lib
 from django.conf import settings
 from django.db import models
@@ -15,6 +16,7 @@ from email_templates.sendgrid import send_email, send_plain_email
 from orders.models import ShippingAddress
 from orders.serializers import BookSaleSerializer
 from orders.stripe import construct_webhook_event, create_payment_intent
+from config.tasks import send_email_task, create_zoom_meeting_for_slot_task
 
 from .models import Cart, CartItem, Order, OrderItem
 from .serializers import (
@@ -295,13 +297,11 @@ class StripeWebhookView(APIView):
             try:
                 self._handle_payment_success(event["data"]["object"])
             except Exception as e:
-                import logging
                 logging.getLogger(__name__).error(f"Webhook fulfillment error: {e}", exc_info=True)
         elif event["type"] == "payment_intent.payment_failed":
             try:
                 self._handle_payment_failed(event["data"]["object"])
             except Exception as e:
-                import logging
                 logging.getLogger(__name__).error(f"Webhook failure handler error: {e}", exc_info=True)
 
         return Response({"status": "ok"})
@@ -356,9 +356,7 @@ class StripeWebhookView(APIView):
                 return
 
     def _fulfill_consultation(self, metadata):
-        import datetime
-        from config.zoom import create_meeting
-        from consultations.models import AvailableTimeslot, ConsultationPurchase
+        from consultations.models import ConsultationPurchase
 
         purchase_id = metadata.get("consultation_purchase_id")
         if not purchase_id:
@@ -379,23 +377,14 @@ class StripeWebhookView(APIView):
             slot.save(update_fields=["is_booked"])
 
             try:
-                start_dt = datetime.datetime.combine(slot.day, slot.start_time)
-                end_dt = datetime.datetime.combine(slot.day, slot.end_time)
-                duration = max(int((end_dt - start_dt).seconds / 60), 30)
-                result = create_meeting(
-                    topic=f"Consultation: {purchase.consultation.title}",
-                    start_datetime=start_dt,
-                    duration_minutes=duration,
-                    agenda=f"Session with {purchase.student.first_name or purchase.student.email}",
-                )
-                AvailableTimeslot.objects.filter(pk=slot.pk).update(
-                    zoom_meeting_id=result["meeting_id"],
-                    zoom_join_url=result["join_url"],
-                    zoom_start_url=result["start_url"],
+                create_zoom_meeting_for_slot_task.delay(
+                    slot.id,
+                    purchase.consultation.title,
+                    purchase.student.first_name or purchase.student.email,
                 )
             except Exception as e:
                 logging.getLogger(__name__).error(
-                    f"Failed to create Zoom meeting for slot {slot.pk}: {e}"
+                    f"Failed to queue Zoom meeting task for slot {slot.pk}: {e}"
                 )
 
         # Send confirmation email
@@ -403,7 +392,7 @@ class StripeWebhookView(APIView):
             f"{s.day} {s.start_time}–{s.end_time}"
             for s in purchase.booked_slots.all()
         )
-        sent = send_email(
+        sent = send_email_task.delay(
             to_email=purchase.student.email,
             purpose="consultation_purchase",
             template_data={
@@ -449,7 +438,7 @@ class StripeWebhookView(APIView):
         membership.end_date = now + timedelta(days=duration)
         membership.save(update_fields=["status", "start_date", "end_date", "updated_at"])
 
-        sent = send_email(
+        send_email_task.delay(
             to_email=membership.user.email,
             purpose="membership_purchase",
             template_data={
@@ -458,18 +447,6 @@ class StripeWebhookView(APIView):
                 "end_date": membership.end_date.strftime("%Y-%m-%d"),
             },
         )
-        if not sent:
-            send_plain_email(
-                to_email=membership.user.email,
-                subject="Membership Activated",
-                body=(
-                    f"Hi {membership.user.first_name or 'there'},\n\n"
-                    f"Your membership has been activated.\n"
-                    f"Plan: {membership.plan.name if membership.plan else 'Membership'}\n"
-                    f"Valid until: {membership.end_date.strftime('%Y-%m-%d')}\n\n"
-                    "Enjoy unlimited access to all courses!"
-                ),
-            )
 
     def _fulfill_donation(self, metadata):
         from donations.models import Donation
@@ -479,77 +456,80 @@ class StripeWebhookView(APIView):
         Donation.objects.filter(id=donation_id).update(status=Donation.Status.COMPLETED)
 
     def _fulfill_order(self, order):
-        for item in order.items.select_related("course", "bundle", "book").all():
-            if item.item_type == "physical_book":
-                item.book.stock_count -= item.quantity
-                item.book.save(update_fields=["stock_count"])
+        from django.db import transaction
+        with transaction.atomic():
+            for item in order.items.select_related("course", "bundle", "book").all():
+                if item.item_type == "physical_book":
+                    item.book.stock_count -= item.quantity
+                    item.book.save(update_fields=["stock_count"])
 
-            elif item.item_type == "digital_book":
-                send_email(
+                elif item.item_type == "digital_book":
+                    send_email_task.delay(
+                        to_email=order.user.email,
+                        purpose="book_purchase",
+                        template_data={
+                            "first_name": order.user.first_name or "there",
+                            "book_title": item.book.title,
+                            "format": "Digital",
+                            "amount": str(order.total_amount),
+                        },
+                    )
+
+                elif item.item_type == "course":
+                    Enrollment.objects.get_or_create(user=order.user, course=item.course)
+                    send_email_task.delay(
+                        to_email=order.user.email,
+                        purpose="course_purchase",
+                        template_data={
+                            "first_name": order.user.first_name or "there",
+                            "course_name": item.course.title,
+                            "amount": str(order.total_amount),
+                        },
+                    )
+
+                elif item.item_type == "bundle":
+                    bundle = item.bundle
+                    courses = list(bundle.courses.all())
+                    for course in courses:
+                        Enrollment.objects.get_or_create(user=order.user, course=course)
+                    course_names = ", ".join(c.title for c in courses)
+                    sent = send_email_task.delay(
+                        to_email=order.user.email,
+                        purpose="bundle_purchase",
+                        template_data={
+                            "first_name": order.user.first_name or "there",
+                            "bundle_name": bundle.name,
+                            "course_names": course_names,
+                            "amount": str(order.total_amount),
+                        },
+                    )
+                    if not sent:
+                        send_plain_email(
+                            to_email=order.user.email,
+                            subject=f"You've purchased {bundle.name}!",
+                            body=(
+                                f"Hi {order.user.first_name or 'there'},\n\n"
+                                f"Thank you for purchasing the {bundle.name} bundle.\n"
+                                f"You now have access to: {course_names}.\n\n"
+                                f"Amount paid: {order.total_amount}\n\n"
+                                "Happy learning!"
+                            ),
+                        )
+
+            if order.order_type == "cart":
+                Cart.objects.filter(user=order.user).first().items.all().delete()
+                send_email_task.delay(
                     to_email=order.user.email,
                     purpose="book_purchase",
                     template_data={
                         "first_name": order.user.first_name or "there",
-                        "book_title": item.book.title,
-                        "format": "Digital",
-                        "amount": str(order.total_amount),
-                    },
-                )
-
-            elif item.item_type == "course":
-                Enrollment.objects.get_or_create(user=order.user, course=item.course)
-                send_email(
-                    to_email=order.user.email,
-                    purpose="course_purchase",
-                    template_data={
-                        "first_name": order.user.first_name or "there",
-                        "course_name": item.course.title,
-                        "amount": str(order.total_amount),
-                    },
-                )
-
-            elif item.item_type == "bundle":
-                bundle = item.bundle
-                for course in bundle.courses.all():
-                    Enrollment.objects.get_or_create(user=order.user, course=course)
-                course_names = ", ".join(c.title for c in bundle.courses.all())
-                sent = send_email(
-                    to_email=order.user.email,
-                    purpose="bundle_purchase",
-                    template_data={
-                        "first_name": order.user.first_name or "there",
-                        "bundle_name": bundle.name,
-                        "course_names": course_names,
-                        "amount": str(order.total_amount),
-                    },
-                )
-                if not sent:
-                    send_plain_email(
-                        to_email=order.user.email,
-                        subject=f"You've purchased {bundle.name}!",
-                        body=(
-                            f"Hi {order.user.first_name or 'there'},\n\n"
-                            f"Thank you for purchasing the {bundle.name} bundle.\n"
-                            f"You now have access to: {course_names}.\n\n"
-                            f"Amount paid: {order.total_amount}\n\n"
-                            "Happy learning!"
+                        "book_title": ", ".join(
+                            item.book.title for item in order.items.all()
                         ),
-                    )
-
-        if order.order_type == "cart":
-            Cart.objects.filter(user=order.user).first().items.all().delete()
-            send_email(
-                to_email=order.user.email,
-                purpose="book_purchase",
-                template_data={
-                    "first_name": order.user.first_name or "there",
-                    "book_title": ", ".join(
-                        item.book.title for item in order.items.all()
-                    ),
-                    "format": "Physical",
-                    "amount": str(order.total_amount),
-                },
-            )
+                        "format": "Physical",
+                        "amount": str(order.total_amount),
+                    },
+                )
 
 
 class BookSalesViewSet(viewsets.ViewSet):
