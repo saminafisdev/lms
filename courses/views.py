@@ -339,6 +339,36 @@ class LessonViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(module_id=self.kwargs["module_pk"])
         return queryset
 
+    def get_permissions(self):
+        if self.action in ("create", "update", "partial_update", "destroy"):
+            return [IsAdminRole()]
+        return [permissions.IsAuthenticated()]
+
+    def retrieve(self, request, *args, **kwargs):
+        lesson = self.get_object()
+        user = request.user
+
+        is_admin_or_teacher = (
+            user.is_staff
+            or getattr(user, "role", None) == "admin"
+            or (
+                lesson.module.course.teacher
+                and lesson.module.course.teacher.user == user
+            )
+        )
+        is_enrolled = Enrollment.objects.filter(
+            user=user, course=lesson.module.course
+        ).exists()
+
+        if not lesson.is_preview and not is_enrolled and not is_admin_or_teacher:
+            return Response(
+                {"error": "You must be enrolled in this course to access this lesson."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = self.get_serializer(lesson)
+        return Response(serializer.data)
+
     def perform_create(self, serializer):
         if "module_pk" in self.kwargs:
             serializer.save(module_id=self.kwargs["module_pk"])
