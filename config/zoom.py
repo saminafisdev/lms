@@ -57,7 +57,7 @@ def create_meeting(topic, start_datetime, duration_minutes, agenda=""):
     Returns:
         dict with keys: meeting_id, join_url, start_url
     """
-    host_email = settings.ZOOM_HOST_EMAIL
+    # "me" resolves to the account owner for Server-to-Server OAuth
     payload = {
         "topic": topic,
         "type": 2,  # Scheduled
@@ -75,7 +75,7 @@ def create_meeting(topic, start_datetime, duration_minutes, agenda=""):
     }
 
     response = requests.post(
-        f"https://api.zoom.us/v2/users/{host_email}/meetings",
+        "https://api.zoom.us/v2/users/me/meetings",
         json=payload,
         headers=_headers(),
         timeout=10,
