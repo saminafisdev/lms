@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils.text import slugify
 from django_resized import ResizedImageField
 from accounts.models import TeacherProfile
 
@@ -30,6 +31,7 @@ class Course(models.Model):
         CourseCategory, on_delete=models.SET_NULL, null=True, related_name="courses"
     )
     title = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=255, unique=True, blank=True)
     subtitle = models.CharField(max_length=255, blank=True, null=True)
     description = models.TextField()
     price = models.DecimalField(

@@ -1,4 +1,5 @@
 from config.fields import RichTextField
+from config.mixins import SlugMixin
 from rest_framework import serializers
 from accounts.serializers import TeacherProfileSerializer
 from accounts.models import TeacherProfile
@@ -130,7 +131,7 @@ class ModuleSerializer(serializers.ModelSerializer):
         return sum(lesson.duration_in_minutes for lesson in obj.lessons.all())
 
 
-class CourseSerializer(serializers.ModelSerializer):
+class CourseSerializer(SlugMixin, serializers.ModelSerializer):
     category = CourseCategorySerializer(read_only=True)
     teacher = TeacherProfileSerializer(read_only=True)
     modules = ModuleSerializer(many=True, read_only=True)
@@ -165,8 +166,17 @@ class SimpleCourseSerializer(serializers.ModelSerializer):
         fields = ["id", "title", "thumbnail", "price", "level", "status"]
 
 
+class BundleCourseSerializer(serializers.ModelSerializer):
+    """Minimal course serializer used inside Bundle responses."""
+    category = CourseCategorySerializer(read_only=True)
+
+    class Meta:
+        model = Course
+        fields = ["id", "title", "slug", "thumbnail", "price", "level", "status", "category"]
+
+
 class BundleSerializer(serializers.ModelSerializer):
-    courses_detail = SimpleCourseSerializer(source="courses", many=True, read_only=True)
+    courses_detail = BundleCourseSerializer(source="courses", many=True, read_only=True)
     course_ids = serializers.PrimaryKeyRelatedField(
         queryset=Course.objects.all(),
         source="courses",
