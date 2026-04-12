@@ -70,10 +70,95 @@ def send_plain_email(to_email, subject, body):
         return False
 
 
+_FALLBACK_EMAILS = {
+    "welcome": (
+        "Welcome!",
+        lambda d: (
+            f"Hi {d.get('first_name', 'there')},\n\n"
+            "Welcome! Your account has been created successfully.\n\n"
+            "Happy learning!"
+        ),
+    ),
+    "membership_purchase": (
+        "Membership Activated",
+        lambda d: (
+            f"Hi {d.get('first_name', 'there')},\n\n"
+            f"Your {d.get('plan_name', 'membership')} has been activated.\n"
+            f"It is valid until {d.get('end_date', 'N/A')}.\n\n"
+            "Thank you!"
+        ),
+    ),
+    "course_purchase": (
+        "Course Purchase Confirmed",
+        lambda d: (
+            f"Hi {d.get('first_name', 'there')},\n\n"
+            f"You now have access to: {d.get('course_name', 'your course')}.\n"
+            f"Amount paid: {d.get('amount', '')}\n\n"
+            "Happy learning!"
+        ),
+    ),
+    "bundle_purchase": (
+        "Bundle Purchase Confirmed",
+        lambda d: (
+            f"Hi {d.get('first_name', 'there')},\n\n"
+            f"You now have access to the {d.get('bundle_name', 'bundle')} bundle.\n"
+            f"Courses included: {d.get('course_names', '')}\n"
+            f"Amount paid: {d.get('amount', '')}\n\n"
+            "Happy learning!"
+        ),
+    ),
+    "book_purchase": (
+        "Book Purchase Confirmed",
+        lambda d: (
+            f"Hi {d.get('first_name', 'there')},\n\n"
+            f"Thank you for purchasing: {d.get('book_title', 'your book')}.\n"
+            f"Format: {d.get('format', '')}\n"
+            f"Amount paid: {d.get('amount', '')}\n\n"
+            "Enjoy your read!"
+        ),
+    ),
+    "consultation_purchase": (
+        "Consultation Booked",
+        lambda d: (
+            f"Hi {d.get('first_name', 'there')},\n\n"
+            f"Your consultation has been booked for {d.get('date', 'the scheduled time')}.\n\n"
+            "We'll be in touch with further details."
+        ),
+    ),
+    "certificate_issued": (
+        "Your Certificate is Ready",
+        lambda d: (
+            f"Hi {d.get('first_name', 'there')},\n\n"
+            f"Congratulations! Your certificate for {d.get('course_name', 'your course')} is ready.\n\n"
+            "You can download it from your dashboard."
+        ),
+    ),
+    "password_reset": (
+        "Password Reset",
+        lambda d: (
+            f"Hi {d.get('first_name', 'there')},\n\n"
+            f"Click the link below to reset your password:\n{d.get('reset_link', '')}\n\n"
+            "If you did not request this, ignore this email."
+        ),
+    ),
+}
+
+
+def _send_fallback_email(to_email, purpose, template_data):
+    """Send a plain-text fallback when no SendGrid template is configured or it fails."""
+    fallback = _FALLBACK_EMAILS.get(purpose)
+    if not fallback:
+        logger.error(f"No fallback email defined for purpose: '{purpose}'")
+        return False
+    subject, body_fn = fallback
+    return send_plain_email(to_email, subject, body_fn(template_data or {}))
+
+
 def send_email(to_email, purpose, template_data=None):
     """
     Send a transactional email for a given purpose.
     Looks up the active SendGrid template ID for that purpose.
+    Falls back to a plain-text email if no template is configured or SendGrid rejects it.
 
     Usage:
         send_email(
@@ -87,8 +172,8 @@ def send_email(to_email, purpose, template_data=None):
     try:
         config = EmailTemplateConfig.objects.get(purpose=purpose, is_active=True)
     except EmailTemplateConfig.DoesNotExist:
-        logger.error(f"No active email template configured for purpose: '{purpose}'")
-        return False
+        logger.warning(f"No active template for '{purpose}', sending plain fallback.")
+        return _send_fallback_email(to_email, purpose, template_data)
 
     sg = get_sendgrid_client()
     message = Mail(
@@ -102,5 +187,5 @@ def send_email(to_email, purpose, template_data=None):
         sg.send(message)
         return True
     except Exception as e:
-        logger.error(f"SendGrid failed sending '{purpose}' to {to_email}: {e}")
-        return False
+        logger.error(f"SendGrid template failed for '{purpose}' to {to_email}: {e}. Sending plain fallback.")
+        return _send_fallback_email(to_email, purpose, template_data)
