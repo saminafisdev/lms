@@ -593,6 +593,37 @@ class LessonViewSet(viewsets.ModelViewSet):
             "instructions": "PUT the raw video file to upload_url with the provided headers.",
         })
 
+    @action(detail=True, methods=["get"], url_path="video-upload-url")
+    def get_video_upload_url(self, request, *args, **kwargs):
+        """
+        Retrieve the upload URL for an already-created Bunny video on this lesson.
+        Use this if you lost the original POST response.
+        Returns 404 if no video has been created for this lesson yet.
+        """
+        lesson = self.get_object()
+        user = request.user
+        if not (user.is_staff or getattr(user, "role", None) in ("admin", "teacher")):
+            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        if not lesson.bunny_video_id:
+            return Response(
+                {"detail": "No video has been created for this lesson yet. POST to video-upload-url to create one."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        library_id = settings.BUNNY_STREAM_LIBRARY_ID
+        upload_url = f"https://video.bunnycdn.com/library/{library_id}/videos/{lesson.bunny_video_id}"
+        return Response({
+            "video_id": lesson.bunny_video_id,
+            "upload_url": upload_url,
+            "upload_method": "PUT",
+            "upload_headers": {
+                "AccessKey": settings.BUNNY_STREAM_API_KEY,
+                "Content-Type": "video/*",
+            },
+            "instructions": "PUT the raw video file to upload_url with the provided headers.",
+        })
+
     @action(detail=True, methods=["get"], url_path="video-status")
     def video_status(self, request, *args, **kwargs):
         """
