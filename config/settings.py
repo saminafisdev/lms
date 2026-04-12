@@ -216,6 +216,19 @@ if USE_BUNNY_STORAGE:
     BUNNY_USERNAME = BUNNY_STORAGE_ZONE
     BUNNY_PASSWORD = BUNNY_STORAGE_API_KEY
     BUNNY_HOSTNAME = BUNNY_CDN_HOSTNAME
+    # Region code for the storage zone's primary location.
+    # django-bunny defaults to "ny" if unset, but Bunny zones created without
+    # a region selection typically land on Falkenstein/DE ("de").
+    # Check your zone's region at:
+    #   Bunny Dashboard → Storage → <zone> → FTP & API Access → Hostname
+    #   de  → storage.bunnycdn.com       (Falkenstein, Germany — default)
+    #   ny  → ny.storage.bunnycdn.com    (New York)
+    #   la  → la.storage.bunnycdn.com    (Los Angeles)
+    #   sg  → sg.storage.bunnycdn.com    (Singapore)
+    #   syd → syd.storage.bunnycdn.com   (Sydney)
+    #   uk  → uk.storage.bunnycdn.com    (London)
+    #   se  → se.storage.bunnycdn.com    (Stockholm)
+    BUNNY_REGION = env("BUNNY_REGION", default="de")
 
     STORAGES = {
         "default": {
