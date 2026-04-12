@@ -58,21 +58,42 @@ class OptionSerializer(serializers.ModelSerializer):
 
 
 class QuestionSerializer(serializers.ModelSerializer):
-    options = OptionSerializer(many=True, read_only=True)
+    options = OptionSerializer(many=True)
 
     class Meta:
         model = Question
         fields = "__all__"
         extra_kwargs = {"quiz": {"required": False}}
 
+    def create(self, validated_data):
+        options_data = validated_data.pop("options", [])
+        question = Question.objects.create(**validated_data)
+        for option_data in options_data:
+            Option.objects.create(question=question, **option_data)
+        return question
+
 
 class QuizSerializer(serializers.ModelSerializer):
-    questions = QuestionSerializer(many=True, read_only=True)
+    questions = QuestionSerializer(many=True, default=[])
 
     class Meta:
         model = Quiz
         fields = "__all__"
         extra_kwargs = {"lesson": {"required": False}}
+
+    def create(self, validated_data):
+        questions_data = validated_data.pop("questions", [])
+        quiz = Quiz.objects.create(**validated_data)
+        for question_data in questions_data:
+            options_data = question_data.pop("options", [])
+            question = Question.objects.create(quiz=quiz, **question_data)
+            for option_data in options_data:
+                Option.objects.create(question=question, **option_data)
+        return quiz
+
+    def update(self, instance, validated_data):
+        validated_data.pop("questions", None)  # questions managed separately
+        return super().update(instance, validated_data)
 
 
 class AssignmentSerializer(serializers.ModelSerializer):
