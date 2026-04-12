@@ -211,6 +211,7 @@ class CourseListSerializer(SlugMixin, serializers.ModelSerializer):
     teacher = CourseTeacherSerializer(read_only=True)
     total_lessons = serializers.SerializerMethodField()
     is_enrolled = serializers.SerializerMethodField()
+    has_access = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
@@ -218,7 +219,7 @@ class CourseListSerializer(SlugMixin, serializers.ModelSerializer):
             "id", "title", "slug", "thumbnail", "price", "level", "status",
             "is_active", "category", "teacher",
             "total_lessons", "duration_in_weeks", "total_hours", "hours_per_session",
-            "is_enrolled",
+            "is_enrolled", "has_access",
         ]
 
     def get_total_lessons(self, obj):
@@ -233,6 +234,17 @@ class CourseListSerializer(SlugMixin, serializers.ModelSerializer):
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return False
+        return Enrollment.objects.filter(user=request.user, course=obj).exists()
+
+    def get_has_access(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        if self.context.get("has_active_membership", False):
+            return True
+        enrolled_course_ids = self.context.get("enrolled_course_ids")
+        if enrolled_course_ids is not None:
+            return obj.pk in enrolled_course_ids
         return Enrollment.objects.filter(user=request.user, course=obj).exists()
 
 
@@ -256,6 +268,8 @@ class CourseSerializer(SlugMixin, serializers.ModelSerializer):
     )
     total_lessons = serializers.SerializerMethodField()
     description = RichTextField()
+    is_enrolled = serializers.SerializerMethodField()
+    has_access = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
@@ -265,6 +279,21 @@ class CourseSerializer(SlugMixin, serializers.ModelSerializer):
         if hasattr(obj, 'total_lessons_count'):
             return obj.total_lessons_count
         return LessonModel.objects.filter(module__course=obj).count()
+
+    def get_is_enrolled(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return Enrollment.objects.filter(user=request.user, course=obj).exists()
+
+    def get_has_access(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        has_membership = hasattr(request.user, "membership") and request.user.membership.is_currently_active
+        if has_membership:
+            return True
+        return Enrollment.objects.filter(user=request.user, course=obj).exists()
 
 
 class SimpleCourseSerializer(serializers.ModelSerializer):
