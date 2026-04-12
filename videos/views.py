@@ -10,6 +10,7 @@ from .serializers import (
     AdminVideoSerializer,
     TeacherVideoSerializer,
     PublicVideoSerializer,
+    VideoListSerializer,
     ApproveRejectSerializer,
 )
 from .permissions import IsAdminRole, IsAdminOrAuthor, IsTeacherOrAdmin
@@ -109,7 +110,29 @@ class VideoViewSet(viewsets.ModelViewSet):
         if not request.user.is_authenticated or request.user.role != "admin":
             Video.objects.filter(pk=instance.pk).update(view_count=instance.view_count + 1)
         serializer = self.get_serializer(instance)
-        return Response(serializer.data)
+        data = serializer.data
+
+        # Related: same category first, then fill with other published videos
+        related_qs = list(
+            Video.objects.filter(status=Video.STATUS_PUBLISHED, category=instance.category)
+            .exclude(pk=instance.pk)
+            .select_related("category", "author", "author__user")[:4]
+        )
+        if len(related_qs) < 4:
+            exclude_ids = [instance.pk] + [v.pk for v in related_qs]
+            fallback = list(
+                Video.objects.filter(status=Video.STATUS_PUBLISHED)
+                .exclude(pk__in=exclude_ids)
+                .select_related("category", "author", "author__user")
+                [:4 - len(related_qs)]
+            )
+            related_qs += fallback
+
+        data["related_videos"] = VideoListSerializer(
+            related_qs, many=True, context=self.get_serializer_context()
+        ).data
+
+        return Response(data)
 
     @action(detail=False, methods=["get"], url_path="my-videos")
     def my_videos(self, request):

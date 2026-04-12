@@ -91,6 +91,20 @@ class PublicVideoSerializer(TaggitSerializer, serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class VideoListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for related video cards — no heavy content field."""
+    category = VideoCategorySerializer(read_only=True)
+    author_detail = VideoAuthorSerializer(source="author", read_only=True)
+
+    class Meta:
+        model = Video
+        fields = [
+            "id", "author_detail", "category", "title", "slug",
+            "cover_image", "excerpt", "view_count", "published_at",
+        ]
+        read_only_fields = fields
+
+
 class ApproveRejectSerializer(serializers.Serializer):
     """Used only for the reject action to capture reason."""
     reason = serializers.CharField(required=False, allow_blank=True)
