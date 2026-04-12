@@ -27,11 +27,12 @@ class AdminVideoSerializer(TaggitSerializer, serializers.ModelSerializer):
     content = RichTextField()
     tags = TagListSerializerField()
     author_detail = VideoAuthorSerializer(source="author", read_only=True)
+    category_detail = VideoCategorySerializer(source="category", read_only=True)
 
     class Meta:
         model = Video
         fields = [
-            "id", "author", "author_detail", "category", "title", "slug",
+            "id", "author", "author_detail", "category", "category_detail", "title", "slug",
             "video_url", "cover_image", "excerpt", "content", "status",
             "rejection_reason", "tags", "view_count", "published_at",
             "created_at", "updated_at",
@@ -52,11 +53,12 @@ class TeacherVideoSerializer(TaggitSerializer, serializers.ModelSerializer):
     content = RichTextField()
     tags = TagListSerializerField()
     author_detail = VideoAuthorSerializer(source="author", read_only=True)
+    category_detail = VideoCategorySerializer(source="category", read_only=True)
 
     class Meta:
         model = Video
         fields = [
-            "id", "author", "author_detail", "category", "title", "slug",
+            "id", "author", "author_detail", "category", "category_detail", "title", "slug",
             "video_url", "cover_image", "excerpt", "content", "status", "tags",
             "published_at", "created_at", "updated_at",
         ]
