@@ -376,7 +376,13 @@ class ScholarshipSerializer(serializers.ModelSerializer):
 
 class EnrollmentSerializer(serializers.ModelSerializer):
     course = SimpleCourseSerializer(read_only=True)
+    course_id = serializers.PrimaryKeyRelatedField(
+        queryset=Course.objects.all(),
+        source="course",
+        write_only=True,
+    )
 
     class Meta:
         model = Enrollment
         fields = "__all__"
+        read_only_fields = ["user", "enrolled_at"]
