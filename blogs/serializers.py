@@ -33,6 +33,10 @@ class AdminBlogSerializer(SlugMixin, TaggitSerializer, serializers.ModelSerializ
     tags = TagListSerializerField()
     reading_time = serializers.ReadOnlyField()
     author_detail = BlogAuthorSerializer(source="author", read_only=True)
+    category_id = serializers.PrimaryKeyRelatedField(
+        source="category", queryset=BlogCategory.objects.all(), write_only=True, required=False, allow_null=True
+    )
+    category = BlogCategorySerializer(read_only=True)
 
     class Meta:
         model = Blog
@@ -40,6 +44,7 @@ class AdminBlogSerializer(SlugMixin, TaggitSerializer, serializers.ModelSerializ
             "id",
             "author",
             "author_detail",
+            "category_id",
             "category",
             "title",
             "slug",
@@ -77,6 +82,10 @@ class TeacherBlogSerializer(TaggitSerializer, serializers.ModelSerializer):
     tags = TagListSerializerField()
     reading_time = serializers.ReadOnlyField()
     author_detail = BlogAuthorSerializer(source="author", read_only=True)
+    category_id = serializers.PrimaryKeyRelatedField(
+        source="category", queryset=BlogCategory.objects.all(), write_only=True, required=False, allow_null=True
+    )
+    category = BlogCategorySerializer(read_only=True)
 
     class Meta:
         model = Blog
@@ -84,6 +93,7 @@ class TeacherBlogSerializer(TaggitSerializer, serializers.ModelSerializer):
             "id",
             "author",
             "author_detail",
+            "category_id",
             "category",
             "title",
             "slug",
