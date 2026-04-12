@@ -215,7 +215,7 @@ if USE_BUNNY_STORAGE:
     # Flat settings read by django-bunny's BunnyStorage
     BUNNY_USERNAME = BUNNY_STORAGE_ZONE
     BUNNY_PASSWORD = BUNNY_STORAGE_API_KEY
-    BUNNY_HOSTNAME = BUNNY_CDN_HOSTNAME
+    BUNNY_HOSTNAME = BUNNY_CDN_HOSTNAME.rstrip("/") + "/"
     # Region code for the storage zone's primary location.
     # django-bunny defaults to "ny" if unset, but Bunny zones created without
     # a region selection typically land on Falkenstein/DE ("de").
