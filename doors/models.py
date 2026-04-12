@@ -1,15 +1,11 @@
 from django.db import models
-from django_resized import ResizedImageField
+
 
 class Door(models.Model):
     title = models.CharField(max_length=255)
     content = models.TextField()
-    icon = ResizedImageField(
-        size=[500, 500],
-        crop=["middle", "center"],
-        quality=100,
+    icon = models.FileField(
         upload_to="doors/icons/",
-        force_format="WEBP",
     )
     is_visible = models.BooleanField(default=True)
     redirect_link = models.URLField(blank=True, null=True)
