@@ -112,6 +112,36 @@ class CourseViewSet(viewsets.ModelViewSet):
 
         return base_qs.filter(is_active=True)
 
+    def retrieve(self, request, *args, **kwargs):
+        from django.db.models import Count
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        data = serializer.data
+
+        # Related: same category first, then fill up with same level
+        related_qs = list(
+            Course.objects.filter(is_active=True, category=instance.category)
+            .exclude(pk=instance.pk)
+            .select_related("category", "teacher", "teacher__user")
+            .annotate(total_lessons_count=Count("modules__lessons", distinct=True))[:4]
+        )
+        if len(related_qs) < 4:
+            exclude_ids = [instance.pk] + [c.pk for c in related_qs]
+            fallback = list(
+                Course.objects.filter(is_active=True, level=instance.level)
+                .exclude(pk__in=exclude_ids)
+                .select_related("category", "teacher", "teacher__user")
+                .annotate(total_lessons_count=Count("modules__lessons", distinct=True))
+                [:4 - len(related_qs)]
+            )
+            related_qs += fallback
+
+        data["related_courses"] = CourseListSerializer(
+            related_qs, many=True, context=self.get_serializer_context()
+        ).data
+
+        return Response(data)
+
     @action(detail=True, methods=["get"], url_path="certificate", permission_classes=[permissions.IsAuthenticated])
     def certificate(self, request, pk=None):
         """

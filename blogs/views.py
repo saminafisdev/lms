@@ -112,7 +112,18 @@ class BlogViewSet(viewsets.ModelViewSet):
         if not request.user.is_authenticated or request.user.role != "admin":
             Blog.objects.filter(pk=instance.pk).update(view_count=instance.view_count + 1)
         serializer = self.get_serializer(instance)
-        return Response(serializer.data)
+        data = serializer.data
+
+        # Related blogs: same category, published, excluding self, up to 4
+        related_qs = Blog.objects.filter(
+            category=instance.category,
+            status=Blog.STATUS_PUBLISHED,
+        ).exclude(pk=instance.pk).select_related("category", "author", "author__user").order_by("-published_at")[:4]
+        data["related_blogs"] = PublicBlogSerializer(
+            related_qs, many=True, context=self.get_serializer_context()
+        ).data
+
+        return Response(data)
 
     @action(detail=False, methods=["get"], url_path="my-blogs")
     def my_blogs(self, request):

@@ -62,6 +62,19 @@ class BookViewSet(viewsets.ModelViewSet):
             return Book.objects.all()
         return Book.objects.filter(is_visible=True)
 
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        data = serializer.data
+
+        # Related books: same category, excluding self, up to 4
+        related_qs = self.get_queryset().filter(
+            category=instance.category
+        ).exclude(pk=instance.pk).select_related("category")[:4]
+        data["related_books"] = self.get_serializer(related_qs, many=True).data
+
+        return Response(data)
+
 
 class BookGalleryImageViewSet(viewsets.ModelViewSet):
     """
