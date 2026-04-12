@@ -8,6 +8,7 @@ from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import viewsets, mixins
 from orders.stripe import create_payment_intent
+from config.permissions import IsAdminRole, IsStudent
 from .models import MembershipPlan, UserMembership
 from .serializers import MembershipPlanSerializer, UserMembershipSerializer
 
@@ -46,7 +47,7 @@ class MembershipPlanViewSet(viewsets.GenericViewSet):
         responses={201: {"type": "object", "properties": {"client_secret": {"type": "string"}, "membership_id": {"type": "integer"}}}},
         description="Subscribe to the membership plan. No request body needed. Returns a Stripe client_secret to complete payment.",
     )
-    @action(detail=False, methods=["post"], url_path="subscribe", permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=["post"], url_path="subscribe", permission_classes=[IsStudent])
     def subscribe(self, request):
         plan = MembershipPlan.get()
         if not plan.is_active:
