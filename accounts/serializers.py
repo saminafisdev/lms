@@ -101,6 +101,27 @@ class TeacherProfileSerializer(serializers.ModelSerializer):
         return teacher_profile
 
 
+class CourseTeacherSerializer(serializers.ModelSerializer):
+    """
+    Minimal teacher serializer for embedding inside Course responses.
+    No nested courses or consultations — avoids circular/deep nesting.
+    """
+    user = CustomUserSerializer()
+
+    class Meta:
+        model = TeacherProfile
+        fields = [
+            "id",
+            "user",
+            "profile_picture",
+            "professional_title",
+            "location",
+            "about",
+            "consultation_rate",
+            "offers_consultations",
+        ]
+
+
 class StudentProfileSerializer(serializers.ModelSerializer):
     user = CustomUserCreateSerializer()
 

@@ -2,7 +2,7 @@ from config.fields import RichTextField
 from config.mixins import SlugMixin
 from rest_framework import serializers
 from django.conf import settings
-from accounts.serializers import TeacherProfileSerializer
+from accounts.serializers import CourseTeacherSerializer
 from accounts.models import TeacherProfile
 from .models import (
     CourseCategory,
@@ -172,7 +172,7 @@ class ModuleSerializer(serializers.ModelSerializer):
 class CourseListSerializer(SlugMixin, serializers.ModelSerializer):
     """Lightweight serializer for course list views — no nested modules/lessons."""
     category = CourseCategorySerializer(read_only=True)
-    teacher = TeacherProfileSerializer(read_only=True)
+    teacher = CourseTeacherSerializer(read_only=True)
     total_lessons = serializers.SerializerMethodField()
     is_enrolled = serializers.SerializerMethodField()
 
@@ -200,7 +200,7 @@ class CourseListSerializer(SlugMixin, serializers.ModelSerializer):
 
 class CourseSerializer(SlugMixin, serializers.ModelSerializer):
     category = CourseCategorySerializer(read_only=True)
-    teacher = TeacherProfileSerializer(read_only=True)
+    teacher = CourseTeacherSerializer(read_only=True)
     modules = ModuleSerializer(many=True, read_only=True)
     category_id = serializers.PrimaryKeyRelatedField(
         queryset=CourseCategory.objects.all(),
