@@ -180,7 +180,9 @@ class CourseListSerializer(SlugMixin, serializers.ModelSerializer):
         model = Course
         fields = [
             "id", "title", "slug", "thumbnail", "price", "level", "status",
-            "is_active", "category", "teacher", "total_lessons", "is_enrolled",
+            "is_active", "category", "teacher",
+            "total_lessons", "duration_in_weeks", "total_hours", "hours_per_session",
+            "is_enrolled",
         ]
 
     def get_total_lessons(self, obj):
