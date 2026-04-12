@@ -16,7 +16,14 @@ admin.site.register(Course)
 admin.site.register(CourseCategory)
 admin.site.register(Scholarship)
 admin.site.register(Module)
-admin.site.register(Lesson)
+
+
+@admin.register(Lesson)
+class LessonAdmin(admin.ModelAdmin):
+    list_display = ("title", "content_type", "module", "order", "is_preview")
+    list_filter = ("content_type",)
+
+
 admin.site.register(Quiz)
 admin.site.register(Question)
 admin.site.register(Option)
