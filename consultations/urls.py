@@ -5,6 +5,7 @@ from .views import (
     AvailableTimeslotViewSet,
     BundleViewSet,
     ConsultationPurchaseViewSet,
+    RecurringAvailabilityViewSet,
 )
 
 router = routers.DefaultRouter()
@@ -14,6 +15,7 @@ router.register(r"purchases", ConsultationPurchaseViewSet, basename="consultatio
 consultation_router = routers.NestedDefaultRouter(router, r"consultations", lookup="consultation")
 consultation_router.register(r"timeslots", AvailableTimeslotViewSet, basename="consultation-timeslots")
 consultation_router.register(r"bundles", BundleViewSet, basename="consultation-bundles")
+consultation_router.register(r"recurring", RecurringAvailabilityViewSet, basename="consultation-recurring")
 
 urlpatterns = [
     path("", include(router.urls)),

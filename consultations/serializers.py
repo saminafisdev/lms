@@ -1,6 +1,19 @@
 from rest_framework import serializers
 from accounts.serializers import CourseTeacherSerializer
-from .models import Consultation, AvailableTimeslot, Bundle, ConsultationPurchase
+from .models import Consultation, AvailableTimeslot, Bundle, ConsultationPurchase, RecurringAvailability
+
+
+class RecurringAvailabilitySerializer(serializers.ModelSerializer):
+    weekday_display = serializers.CharField(source="get_weekday_display", read_only=True)
+
+    class Meta:
+        model = RecurringAvailability
+        fields = [
+            "id", "consultation", "weekday", "weekday_display",
+            "start_time", "end_time", "session_duration_minutes",
+            "valid_from", "valid_until",
+        ]
+        read_only_fields = ["id", "weekday_display"]
 
 
 class AvailableTimeslotSerializer(serializers.ModelSerializer):
@@ -31,6 +44,7 @@ class ConsultationSerializer(serializers.ModelSerializer):
     teacher_id = serializers.IntegerField(write_only=True)
     timeslots = AvailableTimeslotSerializer(many=True, read_only=True)
     bundles = BundleSerializer(many=True, read_only=True)
+    recurring_rules = RecurringAvailabilitySerializer(many=True, read_only=True)
 
     class Meta:
         model = Consultation

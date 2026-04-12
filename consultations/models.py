@@ -22,9 +22,54 @@ class Consultation(models.Model):
         return f"{self.title} by {self.teacher.user.email}"
 
 
+class RecurringAvailability(models.Model):
+    WEEKDAY_CHOICES = [
+        (0, "Monday"),
+        (1, "Tuesday"),
+        (2, "Wednesday"),
+        (3, "Thursday"),
+        (4, "Friday"),
+        (5, "Saturday"),
+        (6, "Sunday"),
+    ]
+
+    consultation = models.ForeignKey(
+        Consultation, on_delete=models.CASCADE, related_name="recurring_rules"
+    )
+    weekday = models.PositiveSmallIntegerField(choices=WEEKDAY_CHOICES)
+    start_time = models.TimeField(help_text="Start of availability window")
+    end_time = models.TimeField(help_text="End of availability window")
+    session_duration_minutes = models.PositiveIntegerField(
+        default=60,
+        help_text="Duration of each individual session slot in minutes",
+    )
+    valid_from = models.DateField(help_text="First date this rule applies from")
+    valid_until = models.DateField(
+        null=True, blank=True,
+        help_text="Last date this rule applies (leave blank for ongoing)",
+    )
+
+    class Meta:
+        ordering = ["weekday", "start_time"]
+        verbose_name_plural = "Recurring availabilities"
+
+    def __str__(self):
+        return (
+            f"{self.get_weekday_display()} {self.start_time}–{self.end_time} "
+            f"({self.session_duration_minutes}min) — {self.consultation.title}"
+        )
+
+
 class AvailableTimeslot(models.Model):
     consultation = models.ForeignKey(
         Consultation, on_delete=models.CASCADE, related_name="timeslots"
+    )
+    recurring_rule = models.ForeignKey(
+        RecurringAvailability,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="generated_slots",
+        help_text="Set if this slot was auto-generated from a recurring rule",
     )
     day = models.DateField()
     start_time = models.TimeField()

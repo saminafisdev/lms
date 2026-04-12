@@ -7,19 +7,20 @@ from rest_framework.response import Response
 from config.permissions import IsAdminRole
 from orders.stripe import create_payment_intent
 
-from .models import AvailableTimeslot, Bundle, Consultation, ConsultationPurchase
+from .models import AvailableTimeslot, Bundle, Consultation, ConsultationPurchase, RecurringAvailability
 from .serializers import (
     AvailableTimeslotSerializer,
     BundleSerializer,
     ConsultationPurchaseSerializer,
     ConsultationSerializer,
+    RecurringAvailabilitySerializer,
 )
 
 
 class ConsultationViewSet(viewsets.ModelViewSet):
     queryset = (
         Consultation.objects.select_related("teacher", "teacher__user")
-        .prefetch_related("timeslots", "bundles")
+        .prefetch_related("timeslots", "bundles", "recurring_rules")
         .all()
     )
     serializer_class = ConsultationSerializer
@@ -108,6 +109,78 @@ class ConsultationViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=True, methods=["get"], url_path="calendar", permission_classes=[permissions.IsAuthenticated])
+    def calendar(self, request, pk=None):
+        """
+        GET /consultations/{id}/calendar/?month=2026-04
+        Returns each day of the requested month with its timeslots and availability status.
+        Status per day:
+          - available:    at least one slot is not booked
+          - fully_booked: all slots are booked
+        Days with no slots are omitted.
+        """
+        consultation = self.get_object()
+        month_str = request.query_params.get("month")
+
+        if not month_str:
+            return Response(
+                {"error": "Provide ?month=YYYY-MM"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            year, month = map(int, month_str.split("-"))
+        except (ValueError, AttributeError):
+            return Response(
+                {"error": "Invalid month format. Use YYYY-MM"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        slots = (
+            AvailableTimeslot.objects
+            .filter(consultation=consultation, day__year=year, day__month=month)
+            .order_by("day", "start_time")
+        )
+
+        calendar_data = {}
+        for slot in slots:
+            day_str = slot.day.isoformat()
+            if day_str not in calendar_data:
+                calendar_data[day_str] = {"status": None, "slots": []}
+            calendar_data[day_str]["slots"].append({
+                "id": slot.id,
+                "start_time": slot.start_time.strftime("%H:%M"),
+                "end_time": slot.end_time.strftime("%H:%M"),
+                "is_booked": slot.is_booked,
+            })
+
+        for day_data in calendar_data.values():
+            all_booked = all(s["is_booked"] for s in day_data["slots"])
+            day_data["status"] = "fully_booked" if all_booked else "available"
+
+        return Response(calendar_data)
+
+
+class RecurringAvailabilityViewSet(viewsets.ModelViewSet):
+    """
+    Admin-only. Manage recurring availability rules for a consultation.
+    Creating/updating a rule auto-generates AvailableTimeslot rows for 8 weeks.
+    """
+    serializer_class = RecurringAvailabilitySerializer
+    permission_classes = [IsAdminRole]
+
+    def get_queryset(self):
+        queryset = RecurringAvailability.objects.all()
+        if "consultation_pk" in self.kwargs:
+            queryset = queryset.filter(consultation_id=self.kwargs["consultation_pk"])
+        return queryset
+
+    def perform_create(self, serializer):
+        if "consultation_pk" in self.kwargs:
+            serializer.save(consultation_id=self.kwargs["consultation_pk"])
+        else:
+            serializer.save()
 
 
 class AvailableTimeslotViewSet(viewsets.ModelViewSet):
