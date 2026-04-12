@@ -3,6 +3,12 @@ from rest_framework import serializers
 from .models import Review
 
 
+class ReviewWriteSerializer(serializers.Serializer):
+    """Minimal schema shown in Swagger for creating/updating a review."""
+    rating = serializers.IntegerField(min_value=1, max_value=5)
+    comment = serializers.CharField(required=False, allow_blank=True)
+
+
 class ReviewSerializer(serializers.ModelSerializer):
     user_name = serializers.SerializerMethodField()
 
@@ -21,7 +27,7 @@ class ReviewSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "user", "user_name", "review_type", "course", "book", "consultation", "created_at", "updated_at"]
+        read_only_fields = ["id", "user", "user_name", "review_type", "created_at", "updated_at"]
 
     def get_user_name(self, obj):
         return obj.user.get_full_name() or obj.user.email
