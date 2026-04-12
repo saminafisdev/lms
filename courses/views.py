@@ -222,8 +222,21 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
             return queryset
         return Enrollment.objects.filter(user=user)
 
+    def get_permissions(self):
+        return [permissions.IsAuthenticated()]
+
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        user = self.request.user
+        if user.is_staff or user.role == "admin":
+            # Admin can enroll any user; default to self if user not specified
+            serializer.save()
+            return
+        # Students can self-enroll only with an active membership
+        has_membership = hasattr(user, "membership") and user.membership.is_currently_active
+        if not has_membership:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("An active membership is required to enroll for free.")
+        serializer.save(user=user)
 
 
 class BundleViewSet(viewsets.ModelViewSet):
