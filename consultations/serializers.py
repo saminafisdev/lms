@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from accounts.serializers import TeacherProfileSerializer
+from accounts.serializers import CourseTeacherSerializer
 from .models import Consultation, AvailableTimeslot, Bundle, ConsultationPurchase
 
 
@@ -27,7 +27,7 @@ class BundleSerializer(serializers.ModelSerializer):
 
 
 class ConsultationSerializer(serializers.ModelSerializer):
-    teacher = TeacherProfileSerializer(read_only=True)
+    teacher = CourseTeacherSerializer(read_only=True)
     teacher_id = serializers.IntegerField(write_only=True)
     timeslots = AvailableTimeslotSerializer(many=True, read_only=True)
     bundles = BundleSerializer(many=True, read_only=True)
