@@ -61,10 +61,6 @@ class Course(models.Model):
     preview_video = models.FileField(
         upload_to="courses/previews/", blank=True, null=True
     )
-    bunny_video_id = models.CharField(
-        max_length=100, blank=True, default="",
-        help_text="Bunny Stream video ID for the course promo/intro video."
-    )
 
     def __str__(self):
         return self.title
