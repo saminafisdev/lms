@@ -21,6 +21,10 @@ class MembershipPlanViewSet(viewsets.GenericViewSet):
     def get_permissions(self):
         if self.action == "retrieve_plan":
             return [AllowAny()]
+        if self.action == "subscribe":
+            return [IsStudent()]
+        if self.action == "my_status":
+            return [IsAuthenticated()]
         return [IsAdminUser()]
 
     @extend_schema(responses=MembershipPlanSerializer, description="Get current membership plan details (public).")
