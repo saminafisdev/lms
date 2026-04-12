@@ -6,46 +6,47 @@ Usage:
 
 Then open http://localhost:8089 to start the test.
 
-User types:
-  - AnonymousUser  : browses public content (courses, blogs, videos, books, doors)
-  - AuthenticatedUser : logs in then also hits authenticated endpoints (enrollments, profile)
+Slugs and IDs are fetched from the API automatically before the test starts.
 """
 
 import random
+import requests
 from locust import HttpUser, task, between, events
 
+# Populated automatically at test start via fetch_seed_data()
+COURSE_SLUGS = []
+BLOG_SLUGS = []
+BOOK_SLUGS = []
+VIDEO_SLUGS = []
 
-# ---------------------------------------------------------------------------
-# Seed data — update these to match what's in your DB
-# ---------------------------------------------------------------------------
-COURSE_SLUGS = [
-    "python-for-data-science",
-    "machine-learning-mastery",
-    "django-rest-framework",
-    "react-nextjs-complete-guide",
-]
-
-BLOG_SLUGS = [
-    "getting-started-with-django",
-    "understanding-ml-pipelines",
-    "react-hooks-deep-dive",
-    "postgresql-performance-tips",
-]
-
-BOOK_SLUGS = [
-    "clean-code",
-    "the-pragmatic-programmer",
-    "django-for-professionals",
-]
-
-VIDEO_SLUGS = [
-    "build-a-machine-learning-pipeline-in-30-minutes",
-    "django-signals-explained",
-    "10-vs-code-extensions-for-django-developers",
-]
-
-# Test credentials (created by `python manage.py seed`)
 STUDENT_CREDENTIALS = {"email": "student1@example.com", "password": "student123"}
+
+HOST = "http://localhost:8000"
+
+
+def fetch_slugs(url, key="slug"):
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        results = data.get("results", data) if isinstance(data, dict) else data
+        return [item[key] for item in results if key in item]
+    except Exception as e:
+        print(f"[locust] Warning: could not fetch {url} — {e}")
+        return []
+
+
+@events.test_start.add_listener
+def fetch_seed_data(environment, **kwargs):
+    base = environment.host or HOST
+    print(f"[locust] Fetching seed data from {base}...")
+
+    COURSE_SLUGS.extend(fetch_slugs(f"{base}/courses/?page_size=100"))
+    BLOG_SLUGS.extend(fetch_slugs(f"{base}/blogs/?page_size=100"))
+    BOOK_SLUGS.extend(fetch_slugs(f"{base}/books/?page_size=100"))
+    VIDEO_SLUGS.extend(fetch_slugs(f"{base}/videos/?page_size=100"))
+
+    print(f"[locust] Loaded: {len(COURSE_SLUGS)} courses, {len(BLOG_SLUGS)} blogs, "
+          f"{len(BOOK_SLUGS)} books, {len(VIDEO_SLUGS)} videos")
 
 
 # ---------------------------------------------------------------------------
@@ -61,6 +62,8 @@ class AnonymousUser(HttpUser):
 
     @task(3)
     def course_detail(self):
+        if not COURSE_SLUGS:
+            return
         slug = random.choice(COURSE_SLUGS)
         self.client.get(f"/courses/{slug}/", name="/courses/<slug>/")
 
@@ -70,6 +73,8 @@ class AnonymousUser(HttpUser):
 
     @task(2)
     def blog_detail(self):
+        if not BLOG_SLUGS:
+            return
         slug = random.choice(BLOG_SLUGS)
         self.client.get(f"/blogs/{slug}/", name="/blogs/<slug>/")
 
@@ -79,6 +84,8 @@ class AnonymousUser(HttpUser):
 
     @task(2)
     def video_detail(self):
+        if not VIDEO_SLUGS:
+            return
         slug = random.choice(VIDEO_SLUGS)
         self.client.get(f"/videos/{slug}/", name="/videos/<slug>/")
 
@@ -88,6 +95,8 @@ class AnonymousUser(HttpUser):
 
     @task(1)
     def book_detail(self):
+        if not BOOK_SLUGS:
+            return
         slug = random.choice(BOOK_SLUGS)
         self.client.get(f"/books/{slug}/", name="/books/<slug>/")
 
