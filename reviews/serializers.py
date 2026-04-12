@@ -21,7 +21,7 @@ class ReviewSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "user", "user_name", "review_type", "created_at", "updated_at"]
+        read_only_fields = ["id", "user", "user_name", "review_type", "course", "book", "consultation", "created_at", "updated_at"]
 
     def get_user_name(self, obj):
         return obj.user.get_full_name() or obj.user.email
