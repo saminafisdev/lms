@@ -228,7 +228,7 @@ if USE_BUNNY_STORAGE:
     #   syd → syd.storage.bunnycdn.com   (Sydney)
     #   uk  → uk.storage.bunnycdn.com    (London)
     #   se  → se.storage.bunnycdn.com    (Stockholm)
-    BUNNY_REGION = env("BUNNY_REGION", default="de")
+    BUNNY_REGION = env("BUNNY_REGION", default="sg")
 
     STORAGES = {
         "default": {
