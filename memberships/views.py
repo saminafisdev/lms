@@ -42,8 +42,9 @@ class MembershipPlanViewSet(viewsets.GenericViewSet):
         return Response(serializer.data)
 
     @extend_schema(
+        request=None,
         responses={201: {"type": "object", "properties": {"client_secret": {"type": "string"}, "membership_id": {"type": "integer"}}}},
-        description="Subscribe to the membership plan. Returns a Stripe client_secret to complete payment.",
+        description="Subscribe to the membership plan. No request body needed. Returns a Stripe client_secret to complete payment.",
     )
     @action(detail=False, methods=["post"], url_path="subscribe", permission_classes=[IsAuthenticated])
     def subscribe(self, request):
