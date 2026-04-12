@@ -250,6 +250,10 @@ class Lesson(models.Model):
     is_preview = models.BooleanField(
         default=False, help_text="If True, this lesson is available for free preview."
     )
+    is_released = models.BooleanField(
+        default=False,
+        help_text="Non-live lessons: mark as released to unlock for enrolled students."
+    )
     order = models.PositiveIntegerField(default=0)
 
     # Bunny Stream video fields

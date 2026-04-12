@@ -2,6 +2,8 @@ from config.fields import RichTextField
 from config.mixins import SlugMixin
 from rest_framework import serializers
 from django.conf import settings
+from django.utils import timezone
+from datetime import timedelta
 from accounts.serializers import CourseTeacherSerializer
 from accounts.models import TeacherProfile
 from .models import (
@@ -84,12 +86,40 @@ class LessonSerializer(serializers.ModelSerializer):
     quiz_details = QuizSerializer(read_only=True)
     assignment_details = AssignmentSerializer(read_only=True)
     is_accessible = serializers.SerializerMethodField()
+    live_status = serializers.SerializerMethodField()
     zoom_start_url = serializers.SerializerMethodField()
     bunny_embed_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Lesson
         fields = "__all__"
+
+    def get_live_status(self, obj):
+        """
+        For live lessons only. Returns one of:
+          - "locked":    more than 30 minutes before scheduled_at
+          - "upcoming":  within 30 minutes before scheduled_at
+          - "live":      class is currently in progress
+          - "completed": class has ended
+        Returns None for non-live lessons.
+        """
+        if obj.content_type != "live":
+            return None
+        if not obj.scheduled_at:
+            return None
+
+        now = timezone.now()
+        duration = timedelta(minutes=obj.duration_in_minutes or 60)
+        end_time = obj.scheduled_at + duration
+        upcoming_window = obj.scheduled_at - timedelta(minutes=30)
+
+        if now >= obj.scheduled_at and now <= end_time:
+            return "live"
+        if now > end_time:
+            return "completed"
+        if now >= upcoming_window:
+            return "upcoming"
+        return "locked"
 
     def get_zoom_start_url(self, obj):
         """Only expose the host start URL to admins and teachers."""
@@ -109,6 +139,15 @@ class LessonSerializer(serializers.ModelSerializer):
         library_id = settings.BUNNY_STREAM_LIBRARY_ID
         return f"https://iframe.mediadelivery.net/embed/{library_id}/{obj.bunny_video_id}"
 
+    def _is_enrolled(self, obj, user):
+        """Check enrollment via pre-fetched context or DB fallback."""
+        enrolled_course_ids = self.context.get("enrolled_course_ids")
+        has_active_membership = self.context.get("has_active_membership", False)
+        if enrolled_course_ids is not None:
+            return has_active_membership or (obj.module.course_id in enrolled_course_ids)
+        has_membership = hasattr(user, "membership") and user.membership.is_currently_active
+        return has_membership or Enrollment.objects.filter(user=user, course=obj.module.course).exists()
+
     def get_is_accessible(self, obj):
         request = self.context.get("request")
         user = request.user if request else None
@@ -120,26 +159,20 @@ class LessonSerializer(serializers.ModelSerializer):
         if obj.module.course.teacher and obj.module.course.teacher.user == user:
             return True
 
-        # Use pre-fetched enrollment set from context (avoids N+1)
-        enrolled_course_ids = self.context.get("enrolled_course_ids")
-        has_active_membership = self.context.get("has_active_membership", False)
-        if enrolled_course_ids is not None:
-            return obj.is_preview or has_active_membership or (obj.module.course_id in enrolled_course_ids)
+        if not self._is_enrolled(obj, user):
+            return obj.is_preview
 
-        # Fallback for contexts without pre-fetched enrollments
-        has_membership = hasattr(user, 'membership') and user.membership.is_currently_active
-        return (
-            obj.is_preview
-            or has_membership
-            or Enrollment.objects.filter(user=user, course=obj.module.course).exists()
-        )
+        # Enrolled student — check release state
+        if obj.content_type == "live":
+            return self.get_live_status(obj) in ("upcoming", "live", "completed")
+        return obj.is_released
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
         is_accessible = self.get_is_accessible(instance)
+        live_status = self.get_live_status(instance)
 
         if not is_accessible:
-            # keep metadata, strip actual content
             data["content"] = None
             data["file_content"] = None
             data["video_content"] = None
@@ -148,6 +181,9 @@ class LessonSerializer(serializers.ModelSerializer):
             data["zoom_join_url"] = None
             data["zoom_start_url"] = None
             data["bunny_embed_url"] = None
+        elif live_status != "live":
+            # Accessible but class not currently live — hide join URL
+            data["zoom_join_url"] = None
 
         return data
 

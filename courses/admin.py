@@ -20,8 +20,8 @@ admin.site.register(Module)
 
 @admin.register(Lesson)
 class LessonAdmin(admin.ModelAdmin):
-    list_display = ("title", "content_type", "module", "order", "is_preview")
-    list_filter = ("content_type",)
+    list_display = ("title", "content_type", "module", "order", "is_preview", "is_released")
+    list_filter = ("content_type", "is_released")
 
 
 admin.site.register(Quiz)
