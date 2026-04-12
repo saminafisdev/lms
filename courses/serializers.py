@@ -211,6 +211,7 @@ class CourseListSerializer(SlugMixin, serializers.ModelSerializer):
     teacher = CourseTeacherSerializer(read_only=True)
     total_lessons = serializers.SerializerMethodField()
     is_enrolled = serializers.SerializerMethodField()
+    bunny_embed_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
@@ -218,7 +219,7 @@ class CourseListSerializer(SlugMixin, serializers.ModelSerializer):
             "id", "title", "slug", "thumbnail", "price", "level", "status",
             "is_active", "category", "teacher",
             "total_lessons", "duration_in_weeks", "total_hours", "hours_per_session",
-            "is_enrolled",
+            "is_enrolled", "bunny_embed_url",
         ]
 
     def get_total_lessons(self, obj):
@@ -234,6 +235,12 @@ class CourseListSerializer(SlugMixin, serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             return False
         return Enrollment.objects.filter(user=request.user, course=obj).exists()
+
+    def get_bunny_embed_url(self, obj):
+        if not obj.bunny_video_id:
+            return None
+        library_id = settings.BUNNY_STREAM_LIBRARY_ID
+        return f"https://iframe.mediadelivery.net/embed/{library_id}/{obj.bunny_video_id}"
 
 
 class CourseSerializer(SlugMixin, serializers.ModelSerializer):
@@ -255,6 +262,7 @@ class CourseSerializer(SlugMixin, serializers.ModelSerializer):
         allow_null=True,
     )
     total_lessons = serializers.SerializerMethodField()
+    bunny_embed_url = serializers.SerializerMethodField()
     description = RichTextField()
 
     class Meta:
@@ -265,6 +273,12 @@ class CourseSerializer(SlugMixin, serializers.ModelSerializer):
         if hasattr(obj, 'total_lessons_count'):
             return obj.total_lessons_count
         return LessonModel.objects.filter(module__course=obj).count()
+
+    def get_bunny_embed_url(self, obj):
+        if not obj.bunny_video_id:
+            return None
+        library_id = settings.BUNNY_STREAM_LIBRARY_ID
+        return f"https://iframe.mediadelivery.net/embed/{library_id}/{obj.bunny_video_id}"
 
 
 class SimpleCourseSerializer(serializers.ModelSerializer):
