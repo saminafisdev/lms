@@ -351,7 +351,8 @@ class StripeWebhookView(APIView):
 
     def _handle_checkout_session_completed(self, session):
         """Fulfills orders created via Stripe Checkout Sessions (direct buy + cart)."""
-        metadata = dict(session.get("metadata") or {})
+        metadata_raw = getattr(session, "metadata", None)
+        metadata = getattr(metadata_raw, "_data", None) or {}
         order_id = metadata.get("order_id")
         if not order_id:
             return
@@ -367,7 +368,8 @@ class StripeWebhookView(APIView):
 
     def _handle_checkout_session_expired(self, session):
         """Marks the order as failed when the Stripe Checkout Session expires."""
-        metadata = dict(session.get("metadata") or {})
+        metadata_raw = getattr(session, "metadata", None)
+        metadata = getattr(metadata_raw, "_data", None) or {}
         order_id = metadata.get("order_id")
         if not order_id:
             return
