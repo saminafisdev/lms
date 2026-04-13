@@ -35,7 +35,7 @@ class BookAdmin(admin.ModelAdmin):
             "fields": ("has_physical", "physical_price", "stock_count")
         }),
         ("Digital Version", {
-            "fields": ("has_digital", "digital_price")
+            "fields": ("has_digital", "digital_price", "digital_file")
         }),
         ("Settings", {
             "fields": ("is_visible",)
