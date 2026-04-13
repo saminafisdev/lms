@@ -15,7 +15,7 @@ from courses.models import Enrollment
 from email_templates.sendgrid import send_email, send_plain_email
 from orders.models import ShippingAddress
 from orders.serializers import BookSaleSerializer
-from orders.stripe import construct_webhook_event, create_payment_intent
+from orders.stripe import construct_webhook_event, create_checkout_session, create_payment_intent
 from config.tasks import send_email_task, create_zoom_meeting_for_slot_task
 
 from .models import Cart, CartItem, Order, OrderItem
@@ -179,24 +179,29 @@ class OrderViewSet(viewsets.ViewSet):
             total_price=price,
         )
 
-        # Create Stripe PaymentIntent
-        intent = create_payment_intent(
-            amount=price,
-            metadata={
-                "order_id": order.id,
-                "user_id": request.user.id,
-            },
+        # Create Stripe Checkout Session
+        session = create_checkout_session(
+            line_items=[{
+                "price_data": {
+                    "currency": settings.CURRENCY,
+                    "unit_amount": int(price * 100),
+                    "product_data": {"name": obj.title},
+                },
+                "quantity": 1,
+            }],
+            success_url=f"{settings.FRONTEND_URL}/order-complete?order_id={order.id}",
+            cancel_url=f"{settings.FRONTEND_URL}/checkout?cancelled=true",
+            metadata={"order_id": order.id, "user_id": request.user.id},
         )
 
-        # Save payment reference
-        order.payment_reference = intent["id"]
+        # Save Checkout Session ID as payment reference
+        order.payment_reference = session["id"]
         order.save(update_fields=["payment_reference"])
 
         return Response(
             {
                 "order": OrderSerializer(order).data,
-                "client_secret": intent["client_secret"],
-                "publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+                "checkout_url": session["url"],
             },
             status=status.HTTP_201_CREATED,
         )
@@ -247,23 +252,28 @@ class OrderViewSet(viewsets.ViewSet):
                 total_price=item.get_total_price(),
             )
 
-        # Create Stripe PaymentIntent
-        intent = create_payment_intent(
-            amount=total,
-            metadata={
-                "order_id": order.id,
-                "user_id": request.user.id,
-            },
+        # Create Stripe Checkout Session
+        session = create_checkout_session(
+            line_items=[{
+                "price_data": {
+                    "currency": settings.CURRENCY,
+                    "unit_amount": int(total * 100),
+                    "product_data": {"name": "Cart Checkout"},
+                },
+                "quantity": 1,
+            }],
+            success_url=f"{settings.FRONTEND_URL}/order-complete?order_id={order.id}",
+            cancel_url=f"{settings.FRONTEND_URL}/cart?cancelled=true",
+            metadata={"order_id": order.id, "user_id": request.user.id},
         )
 
-        order.payment_reference = intent["id"]
+        order.payment_reference = session["id"]
         order.save(update_fields=["payment_reference"])
 
         return Response(
             {
                 "order": OrderSerializer(order).data,
-                "client_secret": intent["client_secret"],
-                "publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+                "checkout_url": session["url"],
             },
             status=status.HTTP_201_CREATED,
         )
@@ -298,6 +308,16 @@ class StripeWebhookView(APIView):
                 self._handle_payment_success(event["data"]["object"])
             except Exception as e:
                 logging.getLogger(__name__).error(f"Webhook fulfillment error: {e}", exc_info=True)
+        elif event["type"] == "checkout.session.completed":
+            try:
+                self._handle_checkout_session_completed(event["data"]["object"])
+            except Exception as e:
+                logging.getLogger(__name__).error(f"Webhook checkout session error: {e}", exc_info=True)
+        elif event["type"] == "checkout.session.expired":
+            try:
+                self._handle_checkout_session_expired(event["data"]["object"])
+            except Exception as e:
+                logging.getLogger(__name__).error(f"Webhook checkout session expired error: {e}", exc_info=True)
         elif event["type"] == "payment_intent.payment_failed":
             try:
                 self._handle_payment_failed(event["data"]["object"])
@@ -328,6 +348,36 @@ class StripeWebhookView(APIView):
             order.status = "completed"
             order.save()
             self._fulfill_order(order)
+
+    def _handle_checkout_session_completed(self, session):
+        """Fulfills orders created via Stripe Checkout Sessions (direct buy + cart)."""
+        metadata = dict(session.get("metadata") or {})
+        order_id = metadata.get("order_id")
+        if not order_id:
+            return
+        try:
+            order = Order.objects.get(id=order_id)
+        except Order.DoesNotExist:
+            return
+        if order.status == "completed":
+            return  # idempotency guard
+        order.status = "completed"
+        order.save()
+        self._fulfill_order(order)
+
+    def _handle_checkout_session_expired(self, session):
+        """Marks the order as failed when the Stripe Checkout Session expires."""
+        metadata = dict(session.get("metadata") or {})
+        order_id = metadata.get("order_id")
+        if not order_id:
+            return
+        try:
+            order = Order.objects.get(id=order_id)
+            if order.status == "pending":
+                order.status = "failed"
+                order.save()
+        except Order.DoesNotExist:
+            return
 
     def _handle_payment_failed(self, intent):
         metadata_raw = getattr(intent, "metadata", None)

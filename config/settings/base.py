@@ -200,6 +200,7 @@ STRIPE_PUBLISHABLE_KEY = env("STRIPE_PUBLISHABLE_KEY", default="")
 STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY", default="")
 STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default="")
 CURRENCY = "usd"
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:5174")
 
 ZOOM_ACCOUNT_ID = env("ZOOM_ACCOUNT_ID", default="")
 ZOOM_CLIENT_ID = env("ZOOM_CLIENT_ID", default="")
