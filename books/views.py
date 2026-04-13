@@ -2,7 +2,7 @@ from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from django.http import FileResponse
+from django.http import HttpResponseRedirect
 from .models import Book, BookCategory, BookGalleryImage
 from .serializers import (
     BookCategorySerializer, AdminBookSerializer, PublicBookSerializer,
@@ -124,11 +124,7 @@ class BookViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        return FileResponse(
-            book.digital_file.open("rb"),
-            as_attachment=True,
-            filename=f"{book.slug}.pdf",
-        )
+        return HttpResponseRedirect(book.digital_file.url)
 
 
 class BookGalleryImageViewSet(viewsets.ModelViewSet):
