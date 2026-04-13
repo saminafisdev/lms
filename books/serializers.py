@@ -41,6 +41,7 @@ class AdminBookSerializer(SlugMixin, serializers.ModelSerializer):
             "published_date",
             "number_of_pages",
             "sample_file",
+            "digital_file",
             "video_url",
             "has_physical",
             "physical_price",
@@ -94,3 +95,23 @@ class PublicBookSerializer(serializers.ModelSerializer):
             "gallery_images",
         ]
         read_only_fields = fields
+
+
+class PurchasedBookSerializer(serializers.ModelSerializer):
+    """Minimal serializer for a user's digital library — never exposes digital_file URL."""
+    category = BookCategorySerializer(read_only=True)
+
+    class Meta:
+        model = Book
+        fields = [
+            "id",
+            "title",
+            "slug",
+            "author",
+            "cover_image",
+            "category",
+            "number_of_pages",
+            "language",
+            "has_digital",
+            "digital_price",
+        ]

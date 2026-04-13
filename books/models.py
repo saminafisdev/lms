@@ -45,7 +45,12 @@ class Book(models.Model):
     
     # Media
     sample_file = models.FileField(
-        upload_to="books/samples/", validators=[validate_pdf], blank=True, null=True
+        upload_to="books/samples/", validators=[validate_pdf], blank=True, null=True,
+        help_text="Free preview PDF visible to everyone."
+    )
+    digital_file = models.FileField(
+        upload_to="books/digital/", validators=[validate_pdf], blank=True, null=True,
+        help_text="Full PDF delivered to buyers. Never exposed publicly."
     )
     video_url = models.URLField(blank=True, null=True, help_text="Link to a book trailer or intro video")
     

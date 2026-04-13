@@ -1,11 +1,15 @@
 from rest_framework import viewsets, permissions, filters, status
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from django.http import FileResponse
 from .models import Book, BookCategory, BookGalleryImage
 from .serializers import (
-    BookCategorySerializer, AdminBookSerializer, PublicBookSerializer, BookGalleryImageSerializer
+    BookCategorySerializer, AdminBookSerializer, PublicBookSerializer,
+    BookGalleryImageSerializer, PurchasedBookSerializer,
 )
 from doors.permissions import IsAdminRole
+from orders.utils import has_access
 
 
 class BookCategoryViewSet(viewsets.ModelViewSet):
@@ -74,6 +78,57 @@ class BookViewSet(viewsets.ModelViewSet):
         data["related_books"] = self.get_serializer(related_qs, many=True).data
 
         return Response(data)
+
+    @action(detail=False, methods=["get"], url_path="my-library",
+            permission_classes=[permissions.IsAuthenticated])
+    def my_library(self, request):
+        """
+        GET /books/my-library/
+        Returns all digital books the authenticated user has purchased.
+        """
+        from orders.models import OrderItem
+        book_ids = OrderItem.objects.filter(
+            order__user=request.user,
+            order__status="completed",
+            item_type="digital_book",
+        ).values_list("book_id", flat=True).distinct()
+
+        books = Book.objects.filter(id__in=book_ids)
+        serializer = PurchasedBookSerializer(books, many=True, context={"request": request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="download",
+            permission_classes=[permissions.IsAuthenticated])
+    def download(self, request, slug=None):
+        """
+        GET /books/{slug}/download/
+        Streams the digital PDF to the buyer. Returns 403 if not purchased.
+        """
+        book = self.get_object()
+
+        if not book.has_digital:
+            return Response(
+                {"error": "This book does not have a digital edition."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not has_access(request.user, book, format="digital"):
+            return Response(
+                {"error": "You have not purchased the digital edition of this book."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not book.digital_file:
+            return Response(
+                {"error": "The digital file is not available yet. Please contact support."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return FileResponse(
+            book.digital_file.open("rb"),
+            as_attachment=True,
+            filename=f"{book.slug}.pdf",
+        )
 
 
 class BookGalleryImageViewSet(viewsets.ModelViewSet):
