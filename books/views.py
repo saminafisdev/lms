@@ -54,7 +54,7 @@ class BookViewSet(viewsets.ModelViewSet):
         return PublicBookSerializer
 
     def get_permissions(self):
-        if self.action in ["list", "retrieve"]:
+        if self.action in ["list", "retrieve", "download", "my_library"]:
             permission_classes = [permissions.AllowAny]
         else:
             permission_classes = [IsAdminRole]
