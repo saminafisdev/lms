@@ -205,7 +205,6 @@ FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:5174")
 ZOOM_ACCOUNT_ID = env("ZOOM_ACCOUNT_ID", default="")
 ZOOM_CLIENT_ID = env("ZOOM_CLIENT_ID", default="")
 ZOOM_CLIENT_SECRET = env("ZOOM_CLIENT_SECRET", default="")
-ZOOM_HOST_EMAIL = env("ZOOM_HOST_EMAIL", default="")
 # Comma-separated list of licensed Zoom room emails for the account pool.
 # e.g. ZOOM_ROOM_EMAILS=room1@xinstitute.com,room2@xinstitute.com,room3@xinstitute.com
 # Leave empty to use single-account mode (users/me).
