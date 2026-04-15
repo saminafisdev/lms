@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "site_settings",
     "memberships",
     "donations",
+    "announcements",
 ]
 
 MIDDLEWARE = [
