@@ -1,6 +1,7 @@
 import base64
 import logging
 import time
+from datetime import timedelta
 
 import requests
 from django.conf import settings
@@ -44,7 +45,47 @@ def _headers():
     }
 
 
-def create_meeting(topic, start_datetime, duration_minutes, agenda=""):
+def get_available_host(start_datetime, duration_minutes, exclude_lesson_pk=None):
+    """
+    Returns the first room email from ZOOM_ROOM_EMAILS that has no overlapping
+    live lesson at the given time slot.
+
+    Falls back to "me" if ZOOM_ROOM_EMAILS is not configured (single account mode).
+    Raises ValueError if all rooms are busy.
+    """
+    room_emails = getattr(settings, "ZOOM_ROOM_EMAILS", [])
+    if not room_emails:
+        return "me"
+
+    end_datetime = start_datetime + timedelta(minutes=duration_minutes)
+
+    from courses.models import Lesson
+    candidates = Lesson.objects.filter(
+        content_type="live",
+        zoom_host_email__isnull=False,
+        scheduled_at__lt=end_datetime,
+    )
+    if exclude_lesson_pk:
+        candidates = candidates.exclude(pk=exclude_lesson_pk)
+
+    busy_emails = set()
+    for lesson in candidates:
+        lesson_end = lesson.scheduled_at + timedelta(minutes=lesson.duration_in_minutes or 60)
+        if lesson_end > start_datetime:
+            busy_emails.add(lesson.zoom_host_email)
+
+    for email in room_emails:
+        if email not in busy_emails:
+            return email
+
+    raise ValueError(
+        f"All {len(room_emails)} Zoom room(s) are occupied at "
+        f"{start_datetime.strftime('%Y-%m-%d %H:%M')} UTC. "
+        "Please reschedule or purchase additional licenses."
+    )
+
+
+def create_meeting(topic, start_datetime, duration_minutes, agenda="", host_email=None, exclude_lesson_pk=None):
     """
     Creates a Zoom scheduled meeting.
 
@@ -53,11 +94,15 @@ def create_meeting(topic, start_datetime, duration_minutes, agenda=""):
         start_datetime: Python datetime object (UTC-aware or naive UTC).
         duration_minutes: Duration in minutes.
         agenda: Optional description.
+        host_email: Specific room email to use. If None, auto-picks from pool.
+        exclude_lesson_pk: Lesson PK to exclude from the conflict check (used when rescheduling).
 
     Returns:
-        dict with keys: meeting_id, join_url, start_url
+        dict with keys: meeting_id, join_url, start_url, host_email
     """
-    # "me" resolves to the account owner for Server-to-Server OAuth
+    if host_email is None:
+        host_email = get_available_host(start_datetime, duration_minutes, exclude_lesson_pk=exclude_lesson_pk)
+
     payload = {
         "topic": topic,
         "type": 2,  # Scheduled
@@ -75,7 +120,7 @@ def create_meeting(topic, start_datetime, duration_minutes, agenda=""):
     }
 
     response = requests.post(
-        "https://api.zoom.us/v2/users/me/meetings",
+        f"https://api.zoom.us/v2/users/{host_email}/meetings",
         json=payload,
         headers=_headers(),
         timeout=10,
@@ -87,6 +132,7 @@ def create_meeting(topic, start_datetime, duration_minutes, agenda=""):
         "meeting_id": str(data["id"]),
         "join_url": data["join_url"],
         "start_url": data["start_url"],
+        "host_email": host_email,
     }
 
 

@@ -285,6 +285,7 @@ class Lesson(models.Model):
         null=True, blank=True, help_text="Start time for live sessions (UTC)"
     )
     zoom_meeting_id = models.CharField(max_length=255, blank=True, null=True)
+    zoom_host_email = models.EmailField(blank=True, null=True)
     zoom_join_url = models.URLField(max_length=1000, blank=True, null=True)
     zoom_start_url = models.URLField(max_length=1000, blank=True, null=True)
 

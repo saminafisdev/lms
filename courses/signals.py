@@ -56,17 +56,19 @@ def lesson_post_save(sender, instance, created, **kwargs):
                     topic=instance.title,
                     start_datetime=instance.scheduled_at,
                     duration_minutes=duration,
+                    exclude_lesson_pk=instance.pk,
                 )
                 Lesson.objects.filter(pk=instance.pk).update(
                     zoom_meeting_id=result["meeting_id"],
+                    zoom_host_email=result["host_email"],
                     zoom_join_url=result["join_url"],
                     zoom_start_url=result["start_url"],
                 )
-                # Also update in-memory so the API response reflects the new values
                 instance.zoom_meeting_id = result["meeting_id"]
+                instance.zoom_host_email = result["host_email"]
                 instance.zoom_join_url = result["join_url"]
                 instance.zoom_start_url = result["start_url"]
-                logger.info(f"Zoom meeting created for Lesson {instance.pk}: {result['meeting_id']}")
+                logger.info(f"Zoom meeting created for Lesson {instance.pk}: {result['meeting_id']} (host: {result['host_email']})")
             except Exception as e:
                 logger.error(f"Failed to create Zoom meeting for Lesson {instance.pk}: {e}")
 
@@ -79,10 +81,12 @@ def lesson_post_save(sender, instance, created, **kwargs):
                 logger.warning(f"Could not delete Zoom meeting {old_meeting_id}: {e}")
             Lesson.objects.filter(pk=instance.pk).update(
                 zoom_meeting_id=None,
+                zoom_host_email=None,
                 zoom_join_url=None,
                 zoom_start_url=None,
             )
             instance.zoom_meeting_id = None
+            instance.zoom_host_email = None
             instance.zoom_join_url = None
             instance.zoom_start_url = None
 
