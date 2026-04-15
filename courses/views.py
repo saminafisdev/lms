@@ -725,6 +725,15 @@ class QuizViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated()]
         return [IsAdminRole()]
 
+    @extend_schema(
+        request=QuizSubmitSerializer,
+        responses={201: QuizAttemptResultSerializer},
+        summary="Submit quiz answers",
+        description=(
+            "Student submits answers for a quiz. Multiple attempts are allowed. "
+            "Returns score (%) and pass/fail only — correct answers are never exposed."
+        ),
+    )
     @action(detail=True, methods=["post"], url_path="submit")
     def submit(self, request, *args, **kwargs):
         """
@@ -783,6 +792,11 @@ class QuizViewSet(viewsets.ModelViewSet):
         result = QuizAttemptResultSerializer(attempt).data
         return Response(result, status=status.HTTP_201_CREATED)
 
+    @extend_schema(
+        responses={200: QuizAttemptListSerializer(many=True)},
+        summary="My quiz attempts",
+        description="Returns the student's past attempt scores. Correct answers are never exposed.",
+    )
     @action(detail=True, methods=["get"], url_path="my-attempts")
     def my_attempts(self, request, *args, **kwargs):
         """
@@ -847,6 +861,16 @@ class AssignmentViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated()]
         return [IsAdminRole()]
 
+    @extend_schema(
+        request=AssignmentSubmissionCreateSerializer,
+        responses={201: AssignmentSubmissionSerializer},
+        summary="Submit assignment",
+        description=(
+            "Student submits their assignment (file and/or text). "
+            "Only one active (pending/approved) submission per assignment is allowed; "
+            "rejected submissions can be resubmitted."
+        ),
+    )
     @action(detail=True, methods=["post"], url_path="submit")
     def submit(self, request, *args, **kwargs):
         """
@@ -886,6 +910,11 @@ class AssignmentViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @extend_schema(
+        responses={200: AssignmentSubmissionSerializer(many=True)},
+        summary="My assignment submissions",
+        description="Returns the student's own submissions for this assignment.",
+    )
     @action(detail=True, methods=["get"], url_path="my-submissions")
     def my_submissions(self, request, *args, **kwargs):
         """
@@ -920,6 +949,12 @@ class AssignmentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
     def get_permissions(self):
         return [IsAdminRole()]
 
+    @extend_schema(
+        request=AssignmentSubmissionReviewSerializer,
+        responses={200: AssignmentSubmissionSerializer},
+        summary="Review assignment submission",
+        description="Admin or teacher approves or rejects a submission with optional feedback and mark.",
+    )
     @action(detail=True, methods=["patch"], url_path="review")
     def review(self, request, pk=None):
         """
