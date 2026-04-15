@@ -350,9 +350,15 @@ class StripeWebhookView(APIView):
             self._fulfill_order(order)
 
     def _handle_checkout_session_completed(self, session):
-        """Fulfills orders created via Stripe Checkout Sessions (direct buy + cart)."""
+        """Fulfills purchases created via Stripe Checkout Sessions."""
         metadata_raw = getattr(session, "metadata", None)
         metadata = getattr(metadata_raw, "_data", None) or {}
+        purchase_type = metadata.get("purchase_type", "order")
+
+        if purchase_type == "membership":
+            self._fulfill_membership(metadata)
+            return
+
         order_id = metadata.get("order_id")
         if not order_id:
             return
@@ -367,9 +373,20 @@ class StripeWebhookView(APIView):
         self._fulfill_order(order)
 
     def _handle_checkout_session_expired(self, session):
-        """Marks the order as failed when the Stripe Checkout Session expires."""
+        """Marks the purchase as failed when the Stripe Checkout Session expires."""
         metadata_raw = getattr(session, "metadata", None)
         metadata = getattr(metadata_raw, "_data", None) or {}
+        purchase_type = metadata.get("purchase_type", "order")
+
+        if purchase_type == "membership":
+            membership_id = metadata.get("membership_id")
+            if membership_id:
+                from memberships.models import UserMembership
+                UserMembership.objects.filter(id=membership_id).update(
+                    status=UserMembership.Status.FAILED
+                )
+            return
+
         order_id = metadata.get("order_id")
         if not order_id:
             return

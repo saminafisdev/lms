@@ -1,4 +1,5 @@
 import logging
+from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 from drf_spectacular.utils import extend_schema
@@ -7,7 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import viewsets, mixins
-from orders.stripe import create_payment_intent
+from orders.stripe import create_checkout_session
 from config.permissions import IsAdminRole, IsStudent
 from .models import MembershipPlan, UserMembership
 from .serializers import MembershipPlanSerializer, UserMembershipSerializer
@@ -48,8 +49,8 @@ class MembershipPlanViewSet(viewsets.GenericViewSet):
 
     @extend_schema(
         request=None,
-        responses={201: {"type": "object", "properties": {"client_secret": {"type": "string"}, "membership_id": {"type": "integer"}}}},
-        description="Subscribe to the membership plan. No request body needed. Returns a Stripe client_secret to complete payment.",
+        responses={201: {"type": "object", "properties": {"checkout_url": {"type": "string"}, "membership_id": {"type": "integer"}}}},
+        description="Subscribe to the membership plan. No request body needed. Returns a Stripe checkout_url — redirect the user to this URL to complete payment.",
     )
     @action(detail=False, methods=["post"], url_path="subscribe", permission_classes=[IsStudent])
     def subscribe(self, request):
@@ -75,19 +76,29 @@ class MembershipPlanViewSet(viewsets.GenericViewSet):
             membership.status = UserMembership.Status.PENDING
             membership.save(update_fields=["plan", "status", "updated_at"])
 
-        intent = create_payment_intent(
-            amount=plan.price,
+        frontend_url = settings.FRONTEND_URL
+        session = create_checkout_session(
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "unit_amount": int(plan.price * 100),
+                    "product_data": {"name": f"Membership – {plan.name}"},
+                },
+                "quantity": 1,
+            }],
+            success_url=f"{frontend_url}/membership/success?membership_id={membership.id}",
+            cancel_url=f"{frontend_url}/membership/cancel",
             metadata={
                 "purchase_type": "membership",
                 "membership_id": str(membership.id),
                 "user_id": str(request.user.id),
             },
         )
-        membership.payment_reference = intent["id"]
+        membership.payment_reference = session["id"]
         membership.save(update_fields=["payment_reference", "updated_at"])
 
         return Response(
-            {"client_secret": intent["client_secret"], "membership_id": membership.id},
+            {"checkout_url": session["url"], "membership_id": membership.id},
             status=status.HTTP_201_CREATED,
         )
 
