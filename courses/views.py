@@ -12,7 +12,7 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema
 from drf_spectacular.openapi import AutoSchema
 from rest_framework import fields as drf_fields
 from accounts.models import TeacherProfile
-from config.permissions import IsAdminRole
+from config.permissions import IsAdminRole, IsAdminOrTeacher
 from .models import (
     Course,
     Bundle,
@@ -947,7 +947,7 @@ class AssignmentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
         ).all()
 
     def get_permissions(self):
-        return [IsAdminRole()]
+        return [IsAdminOrTeacher()]
 
     @extend_schema(
         request=AssignmentSubmissionReviewSerializer,
