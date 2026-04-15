@@ -86,7 +86,7 @@ class Enrollment(models.Model):
         """
         from django.utils import timezone
 
-        lessons = Lesson.objects.filter(module__course=self.course, is_active=True)
+        lessons = Lesson.objects.filter(module__course=self.course, is_released=True)
         if not lessons.exists():
             return False
 
@@ -119,7 +119,7 @@ class Enrollment(models.Model):
 
     @property
     def progress_percent(self):
-        total = Lesson.objects.filter(module__course=self.course, is_active=True).count()
+        total = Lesson.objects.filter(module__course=self.course, is_released=True).count()
         if total == 0:
             return 0
         completed = LessonCompletion.objects.filter(
