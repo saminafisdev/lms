@@ -25,6 +25,9 @@ from .models import (
     Option,
     Assignment,
     Enrollment,
+    QuizAttempt,
+    QuizAnswer,
+    AssignmentSubmission,
 )
 from .serializers import (
     CourseSerializer,
@@ -42,6 +45,12 @@ from .serializers import (
     OptionSerializer,
     AssignmentSerializer,
     EnrollmentSerializer,
+    QuizSubmitSerializer,
+    QuizAttemptResultSerializer,
+    QuizAttemptListSerializer,
+    AssignmentSubmissionCreateSerializer,
+    AssignmentSubmissionReviewSerializer,
+    AssignmentSubmissionSerializer,
 )
 
 
@@ -711,6 +720,80 @@ class QuizViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
+    def get_permissions(self):
+        if self.action in ("submit", "my_attempts"):
+            return [permissions.IsAuthenticated()]
+        return [IsAdminRole()]
+
+    @action(detail=True, methods=["post"], url_path="submit")
+    def submit(self, request, *args, **kwargs):
+        """
+        POST /courses/{slug}/modules/{m}/lessons/{l}/quizzes/{pk}/submit/
+        Student submits quiz answers. Multiple attempts are allowed.
+        Returns score percentage and pass/fail — never exposes correct answers.
+        """
+        quiz = self.get_object()
+
+        # Verify enrollment
+        enrollment = Enrollment.objects.filter(
+            user=request.user, course=quiz.lesson.module.course
+        ).first()
+        if not enrollment:
+            return Response(
+                {"error": "You are not enrolled in this course."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = QuizSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        answers = serializer.validated_data["answers"]
+
+        # Score the attempt
+        questions = {q.id: q for q in quiz.questions.prefetch_related("options")}
+        total_points = sum(q.points for q in questions.values())
+        earned_points = 0
+
+        answer_map = {a["question"].id: a["selected_option"] for a in answers}
+
+        for question_id, question in questions.items():
+            chosen = answer_map.get(question_id)
+            if chosen and chosen.is_correct:
+                earned_points += question.points
+
+        score = round((earned_points / total_points * 100), 2) if total_points else 0
+        passed = score >= quiz.passing_score
+
+        # Persist attempt
+        attempt = QuizAttempt.objects.create(
+            user=request.user, quiz=quiz, score=score, passed=passed
+        )
+        for question_id, option in answer_map.items():
+            if question_id in questions:
+                QuizAnswer.objects.create(
+                    attempt=attempt,
+                    question_id=question_id,
+                    selected_option=option,
+                )
+
+        # Auto-mark lesson complete and check course completion on pass
+        if passed:
+            LessonCompletion.objects.get_or_create(user=request.user, lesson=quiz.lesson)
+            enrollment.check_completion()
+
+        result = QuizAttemptResultSerializer(attempt).data
+        return Response(result, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get"], url_path="my-attempts")
+    def my_attempts(self, request, *args, **kwargs):
+        """
+        GET /courses/{slug}/modules/{m}/lessons/{l}/quizzes/{pk}/my-attempts/
+        Returns the student's past attempt scores (no correct/wrong answers exposed).
+        """
+        quiz = self.get_object()
+        attempts = QuizAttempt.objects.filter(user=request.user, quiz=quiz)
+        serializer = QuizAttemptListSerializer(attempts, many=True)
+        return Response(serializer.data)
+
 
 class QuestionViewSet(viewsets.ModelViewSet):
     serializer_class = QuestionSerializer
@@ -758,3 +841,104 @@ class AssignmentViewSet(viewsets.ModelViewSet):
             serializer.save(lesson_id=self.kwargs["lesson_pk"])
         else:
             serializer.save()
+
+    def get_permissions(self):
+        if self.action in ("submit", "my_submissions"):
+            return [permissions.IsAuthenticated()]
+        return [IsAdminRole()]
+
+    @action(detail=True, methods=["post"], url_path="submit")
+    def submit(self, request, *args, **kwargs):
+        """
+        POST /courses/{slug}/modules/{m}/lessons/{l}/assignments/{pk}/submit/
+        Student submits their assignment. Only one active (pending/approved) submission
+        per student per assignment is allowed; rejected submissions can be resubmitted.
+        """
+        assignment = self.get_object()
+
+        enrollment = Enrollment.objects.filter(
+            user=request.user, course=assignment.lesson.module.course
+        ).first()
+        if not enrollment:
+            return Response(
+                {"error": "You are not enrolled in this course."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Prevent duplicate pending/approved submissions
+        existing = AssignmentSubmission.objects.filter(
+            user=request.user,
+            assignment=assignment,
+            status__in=[AssignmentSubmission.Status.PENDING, AssignmentSubmission.Status.APPROVED],
+        ).first()
+        if existing:
+            return Response(
+                {"error": "You already have an active submission for this assignment."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = AssignmentSubmissionCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        submission = serializer.save(user=request.user, assignment=assignment)
+
+        return Response(
+            AssignmentSubmissionSerializer(submission).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["get"], url_path="my-submissions")
+    def my_submissions(self, request, *args, **kwargs):
+        """
+        GET /courses/{slug}/modules/{m}/lessons/{l}/assignments/{pk}/my-submissions/
+        Returns the student's own submissions for this assignment.
+        """
+        assignment = self.get_object()
+        submissions = AssignmentSubmission.objects.filter(
+            user=request.user, assignment=assignment
+        )
+        serializer = AssignmentSubmissionSerializer(submissions, many=True)
+        return Response(serializer.data)
+
+
+class AssignmentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Admin/teacher viewset for reviewing assignment submissions.
+    GET  /assignment-submissions/               → list all (filter by ?assignment=, ?status=)
+    GET  /assignment-submissions/{id}/          → detail
+    POST /assignment-submissions/{id}/review/   → approve or reject with feedback
+    """
+
+    serializer_class = AssignmentSubmissionSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["assignment", "status", "user"]
+
+    def get_queryset(self):
+        return AssignmentSubmission.objects.select_related(
+            "user", "assignment__lesson", "reviewed_by"
+        ).all()
+
+    def get_permissions(self):
+        return [IsAdminRole()]
+
+    @action(detail=True, methods=["patch"], url_path="review")
+    def review(self, request, pk=None):
+        """
+        PATCH /assignment-submissions/{id}/review/
+        Body: { "status": "approved"|"rejected", "teacher_feedback": "...", "mark": 85 }
+        """
+        submission = self.get_object()
+        serializer = AssignmentSubmissionReviewSerializer(
+            submission, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        submission = serializer.save(reviewed_by=request.user, reviewed_at=timezone.now())
+
+        # If approved, check for course completion
+        if submission.status == AssignmentSubmission.Status.APPROVED:
+            enrollment = Enrollment.objects.filter(
+                user=submission.user, course=submission.assignment.lesson.module.course
+            ).first()
+            if enrollment:
+                enrollment.check_completion()
+
+        return Response(AssignmentSubmissionSerializer(submission).data)

@@ -79,27 +79,47 @@ class Enrollment(models.Model):
 
     def check_completion(self):
         """
-        Called after every lesson completion.
-        Marks enrollment as complete if all lessons are done.
+        Marks enrollment complete when all course requirements are met:
+        - Quiz lessons: a passing QuizAttempt exists
+        - Assignment lessons: an approved AssignmentSubmission exists
+        - All other lessons: a LessonCompletion record exists
         """
         from django.utils import timezone
 
-        total_lessons = Lesson.objects.filter(module__course=self.course).count()
+        lessons = Lesson.objects.filter(module__course=self.course, is_active=True)
+        if not lessons.exists():
+            return False
 
-        completed_lessons = LessonCompletion.objects.filter(
-            user=self.user, lesson__module__course=self.course
-        ).count()
+        for lesson in lessons:
+            if lesson.content_type == "quiz":
+                has_passed = QuizAttempt.objects.filter(
+                    user=self.user, quiz__lesson=lesson, passed=True
+                ).exists()
+                if not has_passed:
+                    return False
+            elif lesson.content_type == "assignment":
+                has_approved = AssignmentSubmission.objects.filter(
+                    user=self.user,
+                    assignment__lesson=lesson,
+                    status=AssignmentSubmission.Status.APPROVED,
+                ).exists()
+                if not has_approved:
+                    return False
+            else:
+                has_completed = LessonCompletion.objects.filter(
+                    user=self.user, lesson=lesson
+                ).exists()
+                if not has_completed:
+                    return False
 
-        if total_lessons > 0 and completed_lessons >= total_lessons:
-            self.is_completed = True
-            self.completed_at = timezone.now()
-            self.save(update_fields=["is_completed", "completed_at"])
-            return True
-        return False
+        self.is_completed = True
+        self.completed_at = timezone.now()
+        self.save(update_fields=["is_completed", "completed_at"])
+        return True
 
     @property
     def progress_percent(self):
-        total = Lesson.objects.filter(module__course=self.course).count()
+        total = Lesson.objects.filter(module__course=self.course, is_active=True).count()
         if total == 0:
             return 0
         completed = LessonCompletion.objects.filter(
@@ -341,3 +361,73 @@ class LessonCompletion(models.Model):
 
     def __str__(self):
         return f"{self.user.email} completed {self.lesson.title}"
+
+
+class QuizAttempt(models.Model):
+    user = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="quiz_attempts"
+    )
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="attempts")
+    score = models.DecimalField(
+        max_digits=5, decimal_places=2, help_text="Score as percentage 0–100"
+    )
+    passed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.email} – {self.quiz} – {self.score}%"
+
+
+class QuizAnswer(models.Model):
+    attempt = models.ForeignKey(
+        QuizAttempt, on_delete=models.CASCADE, related_name="answers"
+    )
+    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    selected_option = models.ForeignKey(Option, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ("attempt", "question")
+
+
+class AssignmentSubmission(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="assignment_submissions",
+    )
+    assignment = models.ForeignKey(
+        Assignment, on_delete=models.CASCADE, related_name="submissions"
+    )
+    submission_text = models.TextField(blank=True, null=True)
+    submission_file = models.FileField(
+        upload_to="courses/submissions/", blank=True, null=True
+    )
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING
+    )
+    teacher_feedback = models.TextField(blank=True, null=True)
+    mark = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
+    reviewed_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_submissions",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.email} – {self.assignment}"

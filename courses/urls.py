@@ -11,6 +11,7 @@ from .views import (
     QuestionViewSet,
     OptionViewSet,
     AssignmentViewSet,
+    AssignmentSubmissionViewSet,
     EnrollmentViewSet,
 )
 
@@ -20,6 +21,7 @@ router.register(r"bundles", BundleViewSet, basename="bundle")
 router.register(r"scholarships", ScholarshipViewSet, basename="scholarship")
 router.register(r"course-categories", CourseCategoryViewSet)
 router.register(r"enrollments", EnrollmentViewSet, basename="enrollment")
+router.register(r"assignment-submissions", AssignmentSubmissionViewSet, basename="assignment-submission")
 
 course_router = routers.NestedDefaultRouter(router, r"courses", lookup="course")
 course_router.register(r"modules", ModuleViewSet, basename="course-modules")

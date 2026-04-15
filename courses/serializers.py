@@ -19,6 +19,9 @@ from .models import (
     Option,
     Assignment,
     Enrollment,
+    QuizAttempt,
+    QuizAnswer,
+    AssignmentSubmission,
 )
 from courses.models import Lesson as LessonModel
 
@@ -407,3 +410,108 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         model = Enrollment
         fields = "__all__"
         read_only_fields = ["user", "enrolled_at"]
+
+
+# ── Quiz Submission ──────────────────────────────────────────────────────────
+
+class QuizAnswerSubmitSerializer(serializers.Serializer):
+    question = serializers.PrimaryKeyRelatedField(queryset=Question.objects.all())
+    selected_option = serializers.PrimaryKeyRelatedField(queryset=Option.objects.all())
+
+    def validate(self, data):
+        if data["selected_option"].question_id != data["question"].id:
+            raise serializers.ValidationError(
+                "selected_option does not belong to the given question."
+            )
+        return data
+
+
+class QuizSubmitSerializer(serializers.Serializer):
+    answers = QuizAnswerSubmitSerializer(many=True)
+
+    def validate_answers(self, value):
+        if not value:
+            raise serializers.ValidationError("At least one answer is required.")
+        return value
+
+
+class QuizAttemptResultSerializer(serializers.ModelSerializer):
+    passing_score = serializers.SerializerMethodField()
+    total_questions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = QuizAttempt
+        fields = ["id", "score", "passed", "passing_score", "total_questions", "created_at"]
+
+    def get_passing_score(self, obj):
+        return obj.quiz.passing_score
+
+    def get_total_questions(self, obj):
+        return obj.quiz.questions.count()
+
+
+class QuizAttemptListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuizAttempt
+        fields = ["id", "score", "passed", "created_at"]
+
+
+# ── Assignment Submission ────────────────────────────────────────────────────
+
+class AssignmentSubmissionCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AssignmentSubmission
+        fields = ["submission_text", "submission_file"]
+
+    def validate(self, data):
+        if not data.get("submission_text") and not data.get("submission_file"):
+            raise serializers.ValidationError(
+                "Provide either submission_text or submission_file."
+            )
+        return data
+
+
+class AssignmentSubmissionReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AssignmentSubmission
+        fields = ["status", "teacher_feedback", "mark"]
+
+    def validate_status(self, value):
+        allowed = [AssignmentSubmission.Status.APPROVED, AssignmentSubmission.Status.REJECTED]
+        if value not in allowed:
+            raise serializers.ValidationError("Status must be 'approved' or 'rejected'.")
+        return value
+
+
+class AssignmentSubmissionSerializer(serializers.ModelSerializer):
+    user_detail = serializers.SerializerMethodField()
+    reviewed_by_detail = serializers.SerializerMethodField()
+    assignment_title = serializers.CharField(source="assignment.lesson.title", read_only=True)
+
+    class Meta:
+        model = AssignmentSubmission
+        fields = [
+            "id",
+            "user_detail",
+            "assignment",
+            "assignment_title",
+            "submission_text",
+            "submission_file",
+            "status",
+            "teacher_feedback",
+            "mark",
+            "reviewed_by_detail",
+            "reviewed_at",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_user_detail(self, obj):
+        u = obj.user
+        return {"id": u.id, "email": u.email, "first_name": u.first_name, "last_name": u.last_name}
+
+    def get_reviewed_by_detail(self, obj):
+        if not obj.reviewed_by:
+            return None
+        u = obj.reviewed_by
+        return {"id": u.id, "email": u.email, "first_name": u.first_name, "last_name": u.last_name}
