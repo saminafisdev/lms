@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Max
 import django_filters
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view, inline_serializer
 from drf_spectacular.openapi import AutoSchema
@@ -445,9 +445,46 @@ class ModuleViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         if "course_pk" in self.kwargs:
-            serializer.save(course_id=self.kwargs["course_pk"])
+            course_id = self.kwargs["course_pk"]
+            next_order = (
+                Module.objects.filter(course_id=course_id).aggregate(
+                    Max("order")
+                )["order__max"] or 0
+            ) + 1
+            serializer.save(course_id=course_id, order=next_order)
         else:
             serializer.save()
+
+    @extend_schema(
+        request=inline_serializer(
+            name="ModuleReorderInput",
+            fields={
+                "order": drf_fields.ListField(
+                    child=inline_serializer(
+                        name="ModuleReorderItem",
+                        fields={
+                            "id": drf_fields.IntegerField(),
+                            "order": drf_fields.IntegerField(),
+                        },
+                    )
+                )
+            },
+        ),
+        responses={200: ModuleSerializer(many=True)},
+        summary="Bulk reorder modules within a course",
+    )
+    @action(detail=False, methods=["post"], url_path="reorder", permission_classes=[IsAdminRole])
+    def reorder(self, request, *args, **kwargs):
+        items = request.data.get("order", [])
+        if not items:
+            return Response({"detail": "Provide 'order' list of {id, order}."}, status=status.HTTP_400_BAD_REQUEST)
+
+        course_id = self.kwargs.get("course_pk")
+        for item in items:
+            Module.objects.filter(pk=item["id"], course_id=course_id).update(order=item["order"])
+
+        queryset = self.get_queryset().order_by("order")
+        return Response(ModuleSerializer(queryset, many=True, context=self.get_serializer_context()).data)
 
 
 class LessonViewSet(viewsets.ModelViewSet):
@@ -516,9 +553,46 @@ class LessonViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         if "module_pk" in self.kwargs:
-            serializer.save(module_id=self.kwargs["module_pk"])
+            module_id = self.kwargs["module_pk"]
+            next_order = (
+                Lesson.objects.filter(module_id=module_id).aggregate(
+                    Max("order")
+                )["order__max"] or 0
+            ) + 1
+            serializer.save(module_id=module_id, order=next_order)
         else:
             serializer.save()
+
+    @extend_schema(
+        request=inline_serializer(
+            name="LessonReorderInput",
+            fields={
+                "order": drf_fields.ListField(
+                    child=inline_serializer(
+                        name="LessonReorderItem",
+                        fields={
+                            "id": drf_fields.IntegerField(),
+                            "order": drf_fields.IntegerField(),
+                        },
+                    )
+                )
+            },
+        ),
+        responses={200: LessonSerializer(many=True)},
+        summary="Bulk reorder lessons within a module",
+    )
+    @action(detail=False, methods=["post"], url_path="reorder", permission_classes=[IsAdminRole])
+    def reorder(self, request, *args, **kwargs):
+        items = request.data.get("order", [])
+        if not items:
+            return Response({"detail": "Provide 'order' list of {id, order}."}, status=status.HTTP_400_BAD_REQUEST)
+
+        module_id = self.kwargs.get("module_pk")
+        for item in items:
+            Lesson.objects.filter(pk=item["id"], module_id=module_id).update(order=item["order"])
+
+        queryset = self.get_queryset().order_by("order")
+        return Response(LessonSerializer(queryset, many=True, context=self.get_serializer_context()).data)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
