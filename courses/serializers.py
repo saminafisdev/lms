@@ -199,7 +199,6 @@ class LessonSerializer(serializers.ModelSerializer):
         if not is_accessible:
             data["content"] = None
             data["file_content"] = None
-            data["video_content"] = None
             data["quiz_details"] = None
             data["assignment_details"] = None
             data["zoom_join_url"] = None

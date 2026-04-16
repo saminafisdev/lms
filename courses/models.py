@@ -263,7 +263,6 @@ class Lesson(models.Model):
         blank=True, null=True, help_text="Text content or external link URL"
     )
     file_content = models.FileField(upload_to="lessons/files/", blank=True, null=True)
-    video_content = models.FileField(upload_to="lessons/videos/", blank=True, null=True)
     duration_in_minutes = models.PositiveIntegerField(
         default=0, help_text="Duration in minutes"
     )
