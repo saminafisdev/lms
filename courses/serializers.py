@@ -321,9 +321,25 @@ class CourseSerializer(SlugMixin, serializers.ModelSerializer):
 
 
 class SimpleCourseSerializer(serializers.ModelSerializer):
+    teacher = serializers.SerializerMethodField()
+
     class Meta:
         model = Course
-        fields = ["id", "title", "thumbnail", "price", "level", "status"]
+        fields = ["id", "title", "thumbnail", "price", "level", "status", "teacher"]
+
+    def get_teacher(self, obj):
+        if not obj.teacher:
+            return None
+        profile = obj.teacher
+        user = profile.user
+        return {
+            "id": profile.id,
+            "full_name": user.get_full_name(),
+            "profile_picture": (
+                profile.profile_picture.url if profile.profile_picture else None
+            ),
+            "professional_title": profile.professional_title,
+        }
 
 
 class BundleCourseSerializer(serializers.ModelSerializer):
