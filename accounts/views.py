@@ -34,7 +34,7 @@ class TeacherProfileViewSet(viewsets.ModelViewSet):
     def get_parsers(self):
         # create requires JSON (nested user object can't be represented in multipart)
         # update/partial_update allow multipart for profile picture uploads
-        if self.action == "create":
+        if getattr(self, "action", None) == "create":
             return [JSONParser()]
         return [MultiPartParser(), FormParser(), JSONParser()]
 
