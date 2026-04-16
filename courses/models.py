@@ -263,6 +263,9 @@ class Lesson(models.Model):
         blank=True, null=True, help_text="Text content or external link URL"
     )
     file_content = models.FileField(upload_to="lessons/files/", blank=True, null=True)
+    # URL to the hosted video (Bunny Stream CDN or any external video URL).
+    # Admin pastes/sets this via the lesson form or API.
+    video_content = models.URLField(max_length=1000, blank=True, default="")
     duration_in_minutes = models.PositiveIntegerField(
         default=0, help_text="Duration in minutes"
     )
