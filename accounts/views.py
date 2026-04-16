@@ -37,7 +37,16 @@ class TeacherProfileViewSet(viewsets.ModelViewSet):
         serializer receives a proper dict.
         JSON/application-json requests are passed through unchanged.
         """
-        data = request.data.copy()
+        if not hasattr(request.data, 'getlist'):
+            # Already a plain dict (JSON request) — pass through unchanged
+            return request.data
+
+        # Build a plain Python dict from QueryDict, preserving lists
+        data = {}
+        for key in request.data.keys():
+            values = request.data.getlist(key)
+            data[key] = values if len(values) > 1 else values[0]
+
         if isinstance(data.get("user"), str):
             try:
                 data["user"] = json.loads(data["user"])
