@@ -68,7 +68,41 @@ class BookViewSet(viewsets.ModelViewSet):
             return Book.objects.all()
         return Book.objects.filter(is_visible=True)
 
-    def retrieve(self, request, *args, **kwargs):
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        book = serializer.save()
+
+        # Accept multiple gallery images in the same create request
+        images = request.FILES.getlist("gallery_images")
+        for index, image in enumerate(images):
+            BookGalleryImage.objects.create(book=book, image=image, order=index)
+
+        headers = self.get_success_headers(serializer.data)
+        # Re-serialize to include the newly created gallery images
+        return Response(
+            self.get_serializer(book).data,
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        book = serializer.save()
+
+        # Append any new gallery images sent with update
+        images = request.FILES.getlist("gallery_images")
+        if images:
+            last_order = BookGalleryImage.objects.filter(book=book).count()
+            for index, image in enumerate(images):
+                BookGalleryImage.objects.create(book=book, image=image, order=last_order + index)
+
+        return Response(self.get_serializer(book).data)
+
+
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         data = serializer.data
