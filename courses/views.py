@@ -611,10 +611,16 @@ class LessonViewSet(viewsets.ModelViewSet):
                 {"detail": f"Failed to fetch video info from Bunny: {e}"},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
-        # Sync status to DB if it changed
+        # Sync status + backfill video_content if it's ready but wasn't set
+        update_fields = []
         if info["status_label"] != lesson.bunny_video_status:
             lesson.bunny_video_status = info["status_label"]
-            lesson.save(update_fields=["bunny_video_status"])
+            update_fields.append("bunny_video_status")
+        if info["status_label"] == "ready" and not lesson.video_content:
+            lesson.video_content = info["embed_url"]
+            update_fields.append("video_content")
+        if update_fields:
+            lesson.save(update_fields=update_fields)
         return Response({
             "video_id": lesson.bunny_video_id,
             "status": info["status_label"],   # created|uploaded|processing|transcoding|ready|error|upload_failed
@@ -639,12 +645,17 @@ class LessonViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        lesson.bunny_video_id = result["video_id"]
+        video_id = result["video_id"]
+        embed_url = f"https://iframe.mediadelivery.net/embed/{settings.BUNNY_STREAM_LIBRARY_ID}/{video_id}"
+
+        lesson.bunny_video_id = video_id
         lesson.bunny_video_status = "created"
-        lesson.save(update_fields=["bunny_video_id", "bunny_video_status"])
+        lesson.video_content = embed_url
+        lesson.save(update_fields=["bunny_video_id", "bunny_video_status", "video_content"])
 
         return Response({
-            "video_id": result["video_id"],
+            "video_id": video_id,
+            "video_content": embed_url,       # already saved on lesson; frontend can use immediately once status=ready
             # PUT the raw video file directly to this URL (do NOT send to our server)
             "upload_url": result["upload_url"],
             "upload_method": "PUT",
@@ -664,7 +675,8 @@ class LessonViewSet(viewsets.ModelViewSet):
         delete_video(lesson.bunny_video_id)
         lesson.bunny_video_id = ""
         lesson.bunny_video_status = ""
-        lesson.save(update_fields=["bunny_video_id", "bunny_video_status"])
+        lesson.video_content = ""
+        lesson.save(update_fields=["bunny_video_id", "bunny_video_status", "video_content"])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     # courses/views.py
