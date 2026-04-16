@@ -1,0 +1,26 @@
+info:
+  name: Upload Video to Bunny.net
+  type: http
+  seq: 2
+
+http:
+  method: PUT
+  url: https://video.bunnycdn.com/library/635468/videos/d5d420c3-f5db-47eb-9b95-ee09674b70cf
+  headers:
+    - name: AccessKey
+      value: dc42ac07-1347-4947-934f3d74691a-1aaf-43ce
+    - name: Content-Type
+      value: video/*
+  body:
+    type: file
+    data:
+      - filePath: /home/nafis/Downloads/13227290_640_360_60fps.mp4
+        contentType: video/mp4
+        selected: true
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

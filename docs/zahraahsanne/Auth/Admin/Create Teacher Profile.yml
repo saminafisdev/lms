@@ -1,0 +1,32 @@
+info:
+  name: Create Teacher Profile
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{base_url}}/teacher-profiles/"
+  body:
+    type: json
+    data: |-
+      {
+        "user": {
+          "email": "teacher1@example.com",
+          "password": "admin123456",
+          "first_name": "Bob",
+          "last_name": "Robinson"
+        },
+        "professional_title": "Software Engineer",
+        "location": "New York, USA",
+        "about": "Software Engineer @ Amazon. Previously worked at Google as a Security Expert",
+        "education": "Computer Science @ MIT",
+        "achievements": ["Grand Champion @ 2020 Hackathon", "2 times chessmaster"],
+        "offers_consultations": false
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

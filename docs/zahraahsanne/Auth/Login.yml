@@ -1,0 +1,32 @@
+info:
+  name: Login
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{base_url}}/auth/jwt/create/"
+  body:
+    type: json
+    data: |-
+      {
+        "email": "admin@example.com",
+        "password": "admin123"
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        if (res.getStatus() === 200) {
+          const { access, refresh } = res.getBody();
+          bru.setEnvVar("access_token", access);
+          bru.setEnvVar("refresh_token", refresh);
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

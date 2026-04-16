@@ -1,0 +1,26 @@
+info:
+  name: Upload Teacher Profile
+  type: http
+  seq: 2
+
+http:
+  method: PATCH
+  url: "{{base_url}}/teacher-profiles/:id/"
+  params:
+    - name: id
+      value: "20"
+      type: path
+  body:
+    type: multipart-form
+    data:
+      - name: profile_picture
+        type: file
+        value:
+          - /home/nafis/Downloads/34.jpg
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

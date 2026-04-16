@@ -1,0 +1,97 @@
+info:
+  name: Create a Book
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{base_url}}/books/"
+  headers:
+    - name: Authorization
+      value: JWT {{access_token}}
+  body:
+    type: multipart-form
+    data:
+      - name: category
+        type: text
+        value: "1"
+      - name: title
+        type: text
+        value: Introduction to Algorithms
+      - name: description
+        type: text
+        value: “Introduction to Algorithms” provides a comprehensive overview and guide to algorithms at large. It acts as an encyclopedic reference for modern algorithms, extensively covering everything between theory and practice in over 1,000 pages. The book is very practical, presenting problems with diagrams and proofs, implementing algorithms, and analyzing the theory behind the results. “Introduction” assumes a reasonable familiarity with math and data structures, but eager readers will have a lot to chew on.
+      - name: slug
+        type: text
+        value: ""
+      - name: author
+        type: text
+        value: Thomas H. Cormen
+      - name: author_designation
+        type: text
+        value: Computer Scientist
+      - name: cover_image
+        type: file
+        value:
+          - /home/nafis/Downloads/healing-anxious-heart.png
+      - name: isbn
+        type: text
+        value: 978-0-07-212575-7
+      - name: language
+        type: text
+        value: English
+      - name: publisher
+        type: text
+        value: Penguin Publisher
+      - name: published_date
+        type: text
+        value: 2025-07-13
+      - name: number_of_pages
+        type: text
+        value: "450"
+      - name: sample_file
+        type: file
+        value:
+          - /home/nafis/Desktop/zahraahsanne_book.pdf
+      - name: video_url
+        type: text
+        value: https://www.youtube.com
+      - name: has_physical
+        type: text
+        value: "true"
+      - name: physical_price
+        type: text
+        value: "75.00"
+      - name: stock_count
+        type: text
+        value: "36"
+      - name: has_digital
+        type: text
+        value: "false"
+      - name: digital_price
+        type: text
+        value: ""
+      - name: digital_file
+        type: text
+        value: ""
+      - name: tags
+        type: text
+        value: '["algorithms", "programming", "computer science"]'
+      - name: is_visible
+        type: text
+        value: "true"
+      - name: gallery_images
+        type: file
+        value:
+          - /home/nafis/Pictures/Wallpapers/nature-landscape-trees-digital-art-wallpaper-d920087dd14a5ddbd64748bf40e1d66d.jpg
+      - name: gallery_images
+        type: file
+        value:
+          - /home/nafis/Pictures/Wallpapers/nature-landscape-trees-digital-art-wallpaper-d920087dd14a5ddbd64748bf40e1d66d.jpg
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

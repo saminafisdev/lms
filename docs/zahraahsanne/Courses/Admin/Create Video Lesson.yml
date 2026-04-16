@@ -1,0 +1,37 @@
+info:
+  name: Create Video Lesson
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{base_url}}/courses/:course_pk/modules/:module_pk/lessons/"
+  headers:
+    - name: Authorization
+      value: JWT {{access_token}}
+  params:
+    - name: module_pk
+      value: "1"
+      type: path
+    - name: course_pk
+      value: "1"
+      type: path
+  body:
+    type: json
+    data: |-
+      {
+        "title": "Video Lesson",
+        "content_type": "video",
+        "duration_in_minutes": 10,
+        "is_preview": false,
+        "is_released": true,
+        "order": 11,
+        "module": 1
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
