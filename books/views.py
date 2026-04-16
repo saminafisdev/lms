@@ -3,6 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.http import HttpResponseRedirect
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
+from rest_framework import serializers as drf_serializers
 from .models import Book, BookCategory, BookGalleryImage
 from .serializers import (
     BookCategorySerializer, AdminBookSerializer, PublicBookSerializer,
@@ -31,6 +33,69 @@ class BookCategoryViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
 
+_GALLERY_IMAGES_FIELD = inline_serializer(
+    name="BookWithGalleryInput",
+    fields={"gallery_images": drf_serializers.ListField(
+        child=drf_serializers.ImageField(),
+        required=False,
+        help_text="Upload one or more gallery images in a single request (multipart/form-data).",
+    )},
+)
+
+
+@extend_schema_view(
+    create=extend_schema(
+        request={
+            "multipart/form-data": inline_serializer(
+                name="BookCreateInput",
+                fields={
+                    **{k: v for k, v in AdminBookSerializer().fields.items()
+                       if k not in ("gallery_images",)},
+                    "gallery_images": drf_serializers.ListField(
+                        child=drf_serializers.ImageField(),
+                        required=False,
+                        help_text="Upload one or more gallery images (repeat field for multiple files).",
+                    ),
+                },
+            )
+        },
+        summary="Create a book with optional gallery images",
+    ),
+    update=extend_schema(
+        request={
+            "multipart/form-data": inline_serializer(
+                name="BookUpdateInput",
+                fields={
+                    **{k: v for k, v in AdminBookSerializer().fields.items()
+                       if k not in ("gallery_images",)},
+                    "gallery_images": drf_serializers.ListField(
+                        child=drf_serializers.ImageField(),
+                        required=False,
+                        help_text="Append new gallery images (repeat field for multiple files).",
+                    ),
+                },
+            )
+        },
+        summary="Update a book and optionally append gallery images",
+    ),
+    partial_update=extend_schema(
+        request={
+            "multipart/form-data": inline_serializer(
+                name="BookPartialUpdateInput",
+                fields={
+                    **{k: v for k, v in AdminBookSerializer().fields.items()
+                       if k not in ("gallery_images",)},
+                    "gallery_images": drf_serializers.ListField(
+                        child=drf_serializers.ImageField(),
+                        required=False,
+                        help_text="Append new gallery images (repeat field for multiple files).",
+                    ),
+                },
+            )
+        },
+        summary="Partially update a book and optionally append gallery images",
+    ),
+)
 class BookViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing books.
