@@ -75,8 +75,8 @@ class TeacherProfileSerializer(serializers.ModelSerializer):
         ]
 
     def get_courses(self, obj):
-        from courses.serializers import SimpleCourseSerializer
-        return SimpleCourseSerializer(
+        from courses.serializers import CourseListSerializer
+        return CourseListSerializer(
             obj.courses.filter(is_active=True), many=True, context=self.context
         ).data
 
