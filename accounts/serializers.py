@@ -12,6 +12,8 @@ User = get_user_model()
 
 # Custom User Create Serializer (handling user creation)
 class CustomUserCreateSerializer(UserCreateSerializer):
+    joined_at = serializers.DateTimeField(source="date_joined", read_only=True)
+
     class Meta(UserCreateSerializer.Meta):
         model = User
         fields = (
@@ -21,6 +23,7 @@ class CustomUserCreateSerializer(UserCreateSerializer):
             "role",
             "first_name",
             "last_name",
+            "joined_at",
         )
         extra_kwargs = {"role": {"read_only": True}}
 
@@ -42,9 +45,11 @@ class CustomUserCreatePasswordRetypeSerializer(UserCreatePasswordRetypeSerialize
 
 # Custom User Serializer (for reading User data)
 class CustomUserSerializer(UserSerializer):
+    joined_at = serializers.DateTimeField(source="date_joined", read_only=True)
+
     class Meta(UserSerializer.Meta):
         model = User
-        fields = ("id", "email", "role", "first_name", "last_name")
+        fields = ("id", "email", "role", "first_name", "last_name", "joined_at")
 
 
 class TeacherProfileSerializer(serializers.ModelSerializer):
