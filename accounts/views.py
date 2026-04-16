@@ -5,6 +5,7 @@ from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 
 from config.sendgrid_contacts import add_contact, remove_contact
 
@@ -30,45 +31,12 @@ class TeacherProfileViewSet(viewsets.ModelViewSet):
         "about",
     ]
 
-    def _coerce_data(self, request):
-        """
-        For multipart requests, the nested `user` object must be sent as a
-        JSON string (e.g. user='{"email":...}'). This method parses it so the
-        serializer receives a proper dict.
-        JSON/application-json requests are passed through unchanged.
-        """
-        if not hasattr(request.data, 'getlist'):
-            # Already a plain dict (JSON request) — pass through unchanged
-            return request.data
-
-        # Build a plain Python dict from QueryDict, preserving lists
-        data = {}
-        for key in request.data.keys():
-            values = request.data.getlist(key)
-            data[key] = values if len(values) > 1 else values[0]
-
-        if isinstance(data.get("user"), str):
-            try:
-                data["user"] = json.loads(data["user"])
-            except json.JSONDecodeError:
-                pass
-        return data
-
-    def create(self, request, *args, **kwargs):
-        data = self._coerce_data(request)
-        serializer = self.get_serializer(data=data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop("partial", False)
-        instance = self.get_object()
-        data = self._coerce_data(request)
-        serializer = self.get_serializer(instance, data=data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
-        return Response(serializer.data)
+    def get_parsers(self):
+        # create requires JSON (nested user object can't be represented in multipart)
+        # update/partial_update allow multipart for profile picture uploads
+        if self.action == "create":
+            return [JSONParser()]
+        return [MultiPartParser(), FormParser(), JSONParser()]
 
     @action(
         detail=False,
