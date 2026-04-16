@@ -1,3 +1,4 @@
+import json
 from rest_framework import permissions
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
@@ -28,6 +29,37 @@ class TeacherProfileViewSet(viewsets.ModelViewSet):
         "location",
         "about",
     ]
+
+    def _coerce_data(self, request):
+        """
+        For multipart requests, the nested `user` object must be sent as a
+        JSON string (e.g. user='{"email":...}'). This method parses it so the
+        serializer receives a proper dict.
+        JSON/application-json requests are passed through unchanged.
+        """
+        data = request.data.copy()
+        if isinstance(data.get("user"), str):
+            try:
+                data["user"] = json.loads(data["user"])
+            except json.JSONDecodeError:
+                pass
+        return data
+
+    def create(self, request, *args, **kwargs):
+        data = self._coerce_data(request)
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        data = self._coerce_data(request)
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
 
     @action(
         detail=False,
