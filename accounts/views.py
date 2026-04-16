@@ -1,4 +1,3 @@
-import json
 from rest_framework import permissions
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
@@ -8,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 
 from config.sendgrid_contacts import add_contact, remove_contact
+from config.permissions import IsAdminRole
 
 from .models import StudentProfile, TeacherProfile
 from .permissions import IsTeacher
@@ -37,6 +37,15 @@ class TeacherProfileViewSet(viewsets.ModelViewSet):
         if self.action == "create":
             return [JSONParser()]
         return [MultiPartParser(), FormParser(), JSONParser()]
+
+    def get_permissions(self):
+        if self.action == "destroy":
+            return [IsAdminRole()]
+        return [permissions.AllowAny()]
+
+    def perform_destroy(self, instance):
+        # Deleting the user cascades and removes the teacher profile too
+        instance.user.delete()
 
     @action(
         detail=False,
