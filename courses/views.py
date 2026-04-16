@@ -520,6 +520,46 @@ class LessonViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        lesson = serializer.instance
+        response_data = serializer.data
+
+        # Auto-initialize Bunny video entry for video-type lessons
+        if lesson.content_type == "video":
+            try:
+                from config.bunny_stream import create_video
+                result = create_video(lesson.title)
+                video_id = result["video_id"]
+                embed_url = (
+                    f"https://iframe.mediadelivery.net/embed/"
+                    f"{settings.BUNNY_STREAM_LIBRARY_ID}/{video_id}"
+                )
+                lesson.bunny_video_id = video_id
+                lesson.bunny_video_status = "created"
+                lesson.video_content = embed_url
+                lesson.save(update_fields=["bunny_video_id", "bunny_video_status", "video_content"])
+                response_data = dict(response_data)
+                response_data["video_upload"] = {
+                    "video_id": video_id,
+                    "upload_url": result["upload_url"],
+                    "upload_method": "PUT",
+                    "upload_headers": {
+                        "AccessKey": settings.BUNNY_STREAM_API_KEY,
+                        "Content-Type": "video/*",
+                    },
+                }
+            except Exception as e:
+                # Don't fail lesson creation if Bunny is unreachable; admin can retry via POST /video/
+                response_data = dict(response_data)
+                response_data["video_upload"] = None
+                response_data["video_upload_error"] = f"Lesson created but Bunny init failed: {e}"
+
+        headers = self.get_success_headers(serializer.data)
+        return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
+
 
     @action(detail=True, methods=["get"], url_path="zoom-link", permission_classes=[permissions.IsAuthenticated])
     def zoom_link(self, request, pk=None, **kwargs):
