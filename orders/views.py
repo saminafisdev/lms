@@ -10,6 +10,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from config.pagination import StandardPagination
 from config.permissions import IsAdminRole
 from courses.models import Enrollment
 from email_templates.sendgrid import send_email, send_plain_email
@@ -134,9 +135,12 @@ class OrderViewSet(viewsets.ViewSet):
         if request.user.role == "admin":
             orders = Order.objects.all().order_by("-created_at")
         else:
-            orders = Order.objects.filter(user=request.user)
-        serializer = OrderSerializer(orders, many=True)
-        return Response(serializer.data)
+            orders = Order.objects.filter(user=request.user).order_by("-created_at")
+
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(orders, request)
+        serializer = OrderSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     def retrieve(self, request, pk=None):
         """GET /orders/{id}/"""
