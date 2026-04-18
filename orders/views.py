@@ -409,6 +409,15 @@ class StripeWebhookView(APIView):
             self._fulfill_membership(metadata)
             return
 
+        if purchase_type == "donation":
+            donation_id = metadata.get("donation_id")
+            if donation_id:
+                from donations.models import Donation
+                Donation.objects.filter(id=donation_id, status=Donation.Status.PENDING).update(
+                    status=Donation.Status.COMPLETED
+                )
+            return
+
         order_id = metadata.get("order_id")
         if not order_id:
             return
@@ -434,6 +443,15 @@ class StripeWebhookView(APIView):
                 from memberships.models import UserMembership
                 UserMembership.objects.filter(id=membership_id).update(
                     status=UserMembership.Status.FAILED
+                )
+            return
+
+        if purchase_type == "donation":
+            donation_id = metadata.get("donation_id")
+            if donation_id:
+                from donations.models import Donation
+                Donation.objects.filter(id=donation_id, status=Donation.Status.PENDING).update(
+                    status=Donation.Status.FAILED
                 )
             return
 

@@ -1,4 +1,3 @@
-import stripe
 import logging
 from django.conf import settings
 from drf_spectacular.utils import extend_schema
@@ -6,11 +5,11 @@ from rest_framework import status, viewsets, mixins
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
+from orders.stripe import create_checkout_session
 from .models import Donation
 from .serializers import DonationCreateSerializer, DonationSerializer
 
 logger = logging.getLogger(__name__)
-stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 class DonationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
@@ -24,12 +23,12 @@ class DonationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
             201: {
                 "type": "object",
                 "properties": {
-                    "client_secret": {"type": "string"},
+                    "checkout_url": {"type": "string"},
                     "donation_id": {"type": "integer"},
                 },
             }
         },
-        description="Make a one-time anonymous donation. Returns a Stripe PaymentIntent client_secret to complete payment.",
+        description="Make a one-time anonymous donation. Returns a Stripe Checkout URL to complete payment.",
     )
     @action(detail=False, methods=["post"], permission_classes=[AllowAny], url_path="donate")
     def donate(self, request):
@@ -46,27 +45,32 @@ class DonationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
         )
 
         try:
-            intent = stripe.PaymentIntent.create(
-                amount=int(data["amount"] * 100),
-                currency=settings.CURRENCY,
-                receipt_email=data["email"],
+            session = create_checkout_session(
+                line_items=[{
+                    "price_data": {
+                        "currency": settings.CURRENCY,
+                        "unit_amount": int(data["amount"] * 100),
+                        "product_data": {"name": "Donation"},
+                    },
+                    "quantity": 1,
+                }],
+                success_url=f"{settings.FRONTEND_URL}/donate/thank-you?donation_id={donation.id}",
+                cancel_url=f"{settings.FRONTEND_URL}/donate?cancelled=true",
                 metadata={
                     "purchase_type": "donation",
                     "donation_id": str(donation.id),
                 },
-                automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
             )
-        except stripe.error.StripeError as e:
+        except Exception as e:
             donation.delete()
             logger.error(f"Stripe error during donation: {e}")
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        donation.stripe_reference = intent["id"]
+        donation.stripe_reference = session["id"]
         donation.save(update_fields=["stripe_reference"])
 
         return Response(
-            {"client_secret": intent["client_secret"], "donation_id": donation.id},
+            {"checkout_url": session["url"], "donation_id": donation.id},
             status=status.HTTP_201_CREATED,
         )
-
 
