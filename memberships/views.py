@@ -11,7 +11,7 @@ from rest_framework import viewsets, mixins
 from orders.stripe import create_checkout_session
 from config.permissions import IsAdminRole, IsStudent
 from .models import MembershipPlan, UserMembership
-from .serializers import MembershipPlanSerializer, UserMembershipSerializer
+from .serializers import MembershipPlanSerializer, UserMembershipSerializer, UserMembershipAdminSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -112,9 +112,20 @@ class MembershipPlanViewSet(viewsets.GenericViewSet):
         return Response(UserMembershipSerializer(membership).data)
 
 
-class UserMembershipAdminViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+class UserMembershipAdminViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
     """Admin-only view to manage all user memberships."""
-    serializer_class = UserMembershipSerializer
     permission_classes = [IsAdminUser]
     queryset = UserMembership.objects.select_related("user", "plan").all()
+
+    def get_serializer_class(self):
+        if self.action in ("create", "update", "partial_update"):
+            return UserMembershipAdminSerializer
+        return UserMembershipSerializer
 
