@@ -33,7 +33,7 @@ class AvailableTimeslotSerializer(serializers.ModelSerializer):
         return None
 
 
-class ConsultationConsultationBundleSerializer(serializers.ModelSerializer):
+class ConsultationBundleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bundle
         fields = "__all__"
