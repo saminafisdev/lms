@@ -1,0 +1,31 @@
+services:
+  web:
+    build: .
+    command: web
+    environment:
+      APP_ROLE: web
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    depends_on:
+      - celery
+
+  celery:
+    build: .
+    command: celery
+    environment:
+      APP_ROLE: celery
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  beat:
+    build: .
+    command: beat
+    environment:
+      APP_ROLE: beat
+    env_file:
+      - .env
+    restart: unless-stopped
