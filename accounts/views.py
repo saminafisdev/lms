@@ -210,7 +210,6 @@ class StudentDashboardView(APIView):
                 module__course_id__in=enrolled_course_ids,
                 content_type="live",
                 scheduled_at__gte=now,
-                is_released=True,
             )
             .select_related("module", "module__course")
             .order_by("scheduled_at")
