@@ -86,7 +86,8 @@ class TeacherProfile(models.Model):
         default=list, blank=True, help_text="List of achievements and credentials"
     )
     consultation_rate = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0.00
+        max_digits=10, decimal_places=2, default=0.00,
+        help_text="The rate the teacher earns per consultation session (payout rate). This is separate from the student-facing price set on each Consultation.",
     )
     offers_consultations = models.BooleanField(
         default=False,
