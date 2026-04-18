@@ -196,7 +196,11 @@ class RecurringAvailabilityViewSet(viewsets.ModelViewSet):
 
 class AvailableTimeslotViewSet(viewsets.ModelViewSet):
     serializer_class = AvailableTimeslotSerializer
-    permission_classes = [IsAdminRole]
+
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [permissions.IsAuthenticated()]
+        return [IsAdminRole()]
 
     def get_queryset(self):
         queryset = AvailableTimeslot.objects.all()
