@@ -1,0 +1,36 @@
+.git
+.gitignore
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+env/
+.env
+*.env
+
+# Local dev
+db.sqlite3
+test.sqlite3
+media/
+staticfiles/
+
+# Dev tools
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test/coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Docs
+docs/
+*.md
+
+# Locust
+locustfile.py
