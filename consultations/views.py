@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import transaction
-from rest_framework import permissions, status, viewsets
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import permissions, serializers as drf_serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -32,6 +33,13 @@ class ConsultationViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated()]
         return [IsAdminRole()]
 
+    @extend_schema(
+        request=inline_serializer(
+            name="ConsultationBookRequest",
+            fields={"timeslot_ids": drf_serializers.ListField(child=drf_serializers.IntegerField())},
+        ),
+        responses={201: ConsultationPurchaseSerializer},
+    )
     @action(detail=True, methods=["post"], url_path="book")
     def book(self, request, pk=None):
         """
@@ -103,7 +111,7 @@ class ConsultationViewSet(viewsets.ModelViewSet):
 
         return Response(
             {
-                "purchase": ConsultationPurchaseSerializer(purchase).data,
+                "purchase": ConsultationPurchaseSerializer(purchase, context={"request": request}).data,
                 "client_secret": intent["client_secret"],
                 "publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
             },
