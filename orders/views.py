@@ -130,19 +130,30 @@ class OrderViewSet(viewsets.ViewSet):
 
     @extend_schema(responses={200: OrderSerializer(many=True)})
     def list(self, request):
-        """GET /orders/ — user's order history."""
-        orders = Order.objects.filter(user=request.user)
+        """GET /orders/ — user's order history (admin sees all)."""
+        if request.user.role == "admin":
+            orders = Order.objects.all().order_by("-created_at")
+        else:
+            orders = Order.objects.filter(user=request.user)
         serializer = OrderSerializer(orders, many=True)
         return Response(serializer.data)
 
     def retrieve(self, request, pk=None):
         """GET /orders/{id}/"""
-        try:
-            order = Order.objects.get(id=pk, user=request.user)
-        except Order.DoesNotExist:
-            return Response(
-                {"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+        if request.user.role == "admin":
+            try:
+                order = Order.objects.get(id=pk)
+            except Order.DoesNotExist:
+                return Response(
+                    {"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            try:
+                order = Order.objects.get(id=pk, user=request.user)
+            except Order.DoesNotExist:
+                return Response(
+                    {"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND
+                )
         return Response(OrderSerializer(order).data)
 
     @extend_schema(request=DirectPurchaseSerializer, responses={201: OrderSerializer})
