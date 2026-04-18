@@ -65,6 +65,10 @@ class ConsultationSerializer(serializers.ModelSerializer):
         return value
 
 
+class ConsultationBookSerializer(serializers.Serializer):
+    timeslot_ids = serializers.ListField(child=serializers.IntegerField(), min_length=1)
+
+
 class ConsultationPurchaseSerializer(serializers.ModelSerializer):
     """Detailed read serializer — used for admin views and student purchase history."""
     student_email = serializers.EmailField(source="student.email", read_only=True)

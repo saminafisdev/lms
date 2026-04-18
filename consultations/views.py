@@ -11,6 +11,7 @@ from orders.stripe import create_payment_intent
 from .models import AvailableTimeslot, Bundle, Consultation, ConsultationPurchase, RecurringAvailability
 from .serializers import (
     AvailableTimeslotSerializer,
+    ConsultationBookSerializer,
     ConsultationBundleSerializer,
     ConsultationPurchaseSerializer,
     ConsultationSerializer,
@@ -25,6 +26,11 @@ class ConsultationViewSet(viewsets.ModelViewSet):
         .all()
     )
     serializer_class = ConsultationSerializer
+
+    def get_serializer_class(self):
+        if self.action == "book":
+            return ConsultationBookSerializer
+        return ConsultationSerializer
 
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
@@ -49,12 +55,9 @@ class ConsultationViewSet(viewsets.ModelViewSet):
         """
         consultation = self.get_object()
 
-        timeslot_ids = request.data.get("timeslot_ids", [])
-        if not timeslot_ids:
-            return Response(
-                {"error": "No timeslots selected."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        serializer = ConsultationBookSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        timeslot_ids = serializer.validated_data["timeslot_ids"]
 
         with transaction.atomic():
             # Lock the timeslots to prevent race conditions
