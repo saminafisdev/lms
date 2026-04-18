@@ -33,7 +33,7 @@ class AvailableTimeslotSerializer(serializers.ModelSerializer):
         return None
 
 
-class BundleSerializer(serializers.ModelSerializer):
+class ConsultationConsultationBundleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bundle
         fields = "__all__"
@@ -43,7 +43,7 @@ class ConsultationSerializer(serializers.ModelSerializer):
     teacher = CourseTeacherSerializer(read_only=True)
     teacher_id = serializers.IntegerField(write_only=True)
     timeslots = AvailableTimeslotSerializer(many=True, read_only=True)
-    bundles = BundleSerializer(many=True, read_only=True)
+    bundles = ConsultationBundleSerializer(many=True, read_only=True)
     recurring_rules = RecurringAvailabilitySerializer(many=True, read_only=True)
 
     class Meta:
@@ -70,7 +70,7 @@ class ConsultationPurchaseSerializer(serializers.ModelSerializer):
     student_name = serializers.SerializerMethodField()
     consultation_title = serializers.CharField(source="consultation.title", read_only=True)
     booked_slots = AvailableTimeslotSerializer(many=True, read_only=True)
-    bundle_applied = BundleSerializer(read_only=True)
+    bundle_applied = ConsultationBundleSerializer(read_only=True)
 
     class Meta:
         model = ConsultationPurchase

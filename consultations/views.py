@@ -10,7 +10,7 @@ from orders.stripe import create_payment_intent
 from .models import AvailableTimeslot, Bundle, Consultation, ConsultationPurchase, RecurringAvailability
 from .serializers import (
     AvailableTimeslotSerializer,
-    BundleSerializer,
+    ConsultationBundleSerializer,
     ConsultationPurchaseSerializer,
     ConsultationSerializer,
     RecurringAvailabilitySerializer,
@@ -201,7 +201,7 @@ class AvailableTimeslotViewSet(viewsets.ModelViewSet):
 
 
 class BundleViewSet(viewsets.ModelViewSet):
-    serializer_class = BundleSerializer
+    serializer_class = ConsultationBundleSerializer
     permission_classes = [IsAdminRole]
 
     def get_queryset(self):
