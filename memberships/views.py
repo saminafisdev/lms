@@ -37,6 +37,19 @@ class MembershipPlanViewSet(viewsets.GenericViewSet):
     @extend_schema(
         request=MembershipPlanSerializer,
         responses=MembershipPlanSerializer,
+        description="Create the membership plan (admin only). Safe to call on fresh DB — creates if not exists, otherwise updates.",
+    )
+    @action(detail=False, methods=["post"], url_path="plan")
+    def create_plan(self, request):
+        plan = MembershipPlan.get()  # get_or_create singleton
+        serializer = MembershipPlanSerializer(plan, data=request.data, partial=False)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        request=MembershipPlanSerializer,
+        responses=MembershipPlanSerializer,
         description="Update the membership plan (admin only). All fields optional.",
     )
     @action(detail=False, methods=["patch"], url_path="plan/update")
