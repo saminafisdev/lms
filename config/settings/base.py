@@ -121,6 +121,10 @@ DJOSER = {
     "LOGIN_FIELD": "email",
     "USER_CREATE_PASSWORD_RETYPE": True,
     "SEND_ACTIVATION_EMAIL": False,
+    "PASSWORD_RESET_CONFIRM_RETYPE": True,
+    "PASSWORD_RESET_CONFIRM_URL": "reset-password/{uid}/{token}",
+    "DOMAIN": env("FRONTEND_URL", default="").replace("https://", "").replace("http://", "").rstrip("/"),
+    "SITE_NAME": env("SITE_NAME", default="LMS"),
     "SERIALIZERS": {
         "user_create": "accounts.serializers.CustomUserCreateSerializer",
         "user_create_password_retype": "accounts.serializers.CustomUserCreatePasswordRetypeSerializer",
