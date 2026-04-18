@@ -56,6 +56,12 @@ class ConsultationViewSet(viewsets.ModelViewSet):
         """
         consultation = self.get_object()
 
+        if not consultation.standard_price or consultation.standard_price <= 0:
+            return Response(
+                {"error": "This consultation has no price set. Please contact an admin."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         serializer = ConsultationBookSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         timeslot_ids = serializer.validated_data["timeslot_ids"]
