@@ -102,6 +102,15 @@ class StudentProfile(models.Model):
         User, on_delete=models.CASCADE, related_name="student_profile"
     )
     is_subscribed_to_newsletter = models.BooleanField(default=True)
+    phone_number = models.CharField(max_length=30, blank=True, null=True)
+    location = models.CharField(max_length=255, blank=True, null=True)
+    profile_picture = ResizedImageField(
+        size=[400, 400],
+        crop=["middle", "center"],
+        upload_to="student_profiles/",
+        blank=True,
+        null=True,
+    )
 
     def __str__(self):
         return f"{self.user.email} - Student Profile"
