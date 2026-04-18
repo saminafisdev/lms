@@ -37,6 +37,7 @@ class ConsultationBundleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bundle
         fields = "__all__"
+        read_only_fields = ["consultation"]
 
 
 class ConsultationSerializer(serializers.ModelSerializer):
