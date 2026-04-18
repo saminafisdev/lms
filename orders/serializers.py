@@ -54,6 +54,19 @@ class CartSerializer(serializers.ModelSerializer):
         return obj.get_total()
 
 
+class ShippingAddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShippingAddress
+        fields = [
+            "full_name",
+            "phone",
+            "address_line",
+            "city",
+            "country",
+            "postal_code",
+        ]
+
+
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
@@ -70,6 +83,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
+    shipping_address = ShippingAddressSerializer(read_only=True)
 
     class Meta:
         model = Order
@@ -162,19 +176,6 @@ class DirectPurchaseSerializer(serializers.Serializer):
             data["scholarship"] = None
 
         return data
-
-
-class ShippingAddressSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ShippingAddress
-        fields = [
-            "full_name",
-            "phone",
-            "address_line",
-            "city",
-            "country",
-            "postal_code",
-        ]
 
 
 class CartCheckoutSerializer(serializers.Serializer):
