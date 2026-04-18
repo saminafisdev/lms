@@ -159,47 +159,50 @@ class StudentDashboardView(APIView):
     def get(self, request):
         from courses.models import Enrollment, Lesson
         from courses.serializers import EnrollmentSerializer, LessonSerializer
-        from orders.models import Order
+        from orders.models import Order, OrderItem
         from orders.serializers import OrderSerializer
         from books.models import Book
         from books.serializers import PurchasedBookSerializer
-        from orders.models import OrderItem
-        from consultations.models import ConsultationPurchase, AvailableTimeslot
-        from consultations.serializers import ConsultationPurchaseSerializer, AvailableTimeslotSerializer
+        from consultations.models import AvailableTimeslot
+        from consultations.serializers import AvailableTimeslotSerializer
 
         user = request.user
         now = timezone.now()
 
-        # My courses (enrollments)
-        enrollments = (
+        # My courses (enrollments) — single query with all relations
+        enrollments = list(
             Enrollment.objects.filter(user=user)
             .select_related("course", "course__teacher", "course__teacher__user", "course__category")
         )
 
-        # My books (purchased digital books)
+        # My books (purchased digital books) — select_related for category avoids N+1
         book_ids = OrderItem.objects.filter(
             order__user=user,
             order__status="completed",
             item_type="digital_book",
         ).values_list("book_id", flat=True).distinct()
-        books = Book.objects.filter(id__in=book_ids)
+        books = list(Book.objects.filter(id__in=book_ids).select_related("category"))
 
-        # My orders
-        orders = Order.objects.filter(user=user).order_by("-created_at")[:10]
+        # My orders — prefetch items and shipping_address to avoid N+1
+        orders = list(
+            Order.objects.filter(user=user)
+            .prefetch_related("items", "shipping_address")
+            .order_by("-created_at")[:10]
+        )
 
-        # Upcoming consultation sessions (booked slots in the future)
-        upcoming_sessions = (
+        # Upcoming consultation sessions — filter by day, not time
+        upcoming_sessions = list(
             AvailableTimeslot.objects.filter(
                 purchases__student=user,
                 purchases__status="confirmed",
-                start_time__gte=now,
+                day__gte=now.date(),
             )
             .select_related("consultation", "consultation__teacher", "consultation__teacher__user")
-            .order_by("start_time")[:5]
+            .order_by("day", "start_time")[:5]
         )
 
         # Next live class from enrolled courses
-        enrolled_course_ids = enrollments.values_list("course_id", flat=True)
+        enrolled_course_ids = [e.course_id for e in enrollments]
         next_live = (
             Lesson.objects.filter(
                 module__course_id__in=enrolled_course_ids,
@@ -212,10 +215,10 @@ class StudentDashboardView(APIView):
             .first()
         )
 
-        # Stats
+        # Stats — reuse already-fetched data, no extra COUNT queries
         stats = {
-            "total_active_courses": enrollments.count(),
-            "total_books": books.count(),
+            "total_active_courses": len(enrollments),
+            "total_books": len(books),
             "total_orders": Order.objects.filter(user=user).count(),
         }
 
