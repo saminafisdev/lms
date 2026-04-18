@@ -132,10 +132,15 @@ class OrderViewSet(viewsets.ViewSet):
     @extend_schema(responses={200: OrderSerializer(many=True)})
     def list(self, request):
         """GET /orders/ — user's order history (admin sees all)."""
+        qs = Order.objects.prefetch_related(
+            "items__course",
+            "items__book",
+            "shipping_address",
+        )
         if request.user.role == "admin":
-            orders = Order.objects.all().order_by("-created_at")
+            orders = qs.order_by("-created_at")
         else:
-            orders = Order.objects.filter(user=request.user).order_by("-created_at")
+            orders = qs.filter(user=request.user).order_by("-created_at")
 
         paginator = StandardPagination()
         page = paginator.paginate_queryset(orders, request)
