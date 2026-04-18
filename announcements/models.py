@@ -27,15 +27,19 @@ class CourseAnnouncement(models.Model):
 
 
 class SiteAnnouncement(models.Model):
-    big_text = models.CharField(max_length=255)
-    small_text = models.TextField(blank=True, default="")
+    title_prefix = models.CharField(max_length=100, blank=True, default="")
+    main_title = models.CharField(max_length=255)
+    message = models.TextField(blank=True, default="")
+    badges = models.JSONField(default=list, blank=True, help_text="List of campaign badge strings, e.g. ['New', 'Limited']")
     image = ResizedImageField(
         size=[800, 600],
         upload_to="announcements/",
         blank=True,
         null=True,
     )
-    link = models.URLField(blank=True, default="")
+    cta_text = models.CharField(max_length=100, blank=True, default="")
+    cta_link = models.URLField(blank=True, default="")
+    highlights = models.JSONField(default=list, blank=True, help_text="List of highlight strings, e.g. ['Free shipping', '24/7 support']")
     is_active = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -51,4 +55,4 @@ class SiteAnnouncement(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.big_text
+        return self.main_title

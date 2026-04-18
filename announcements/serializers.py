@@ -20,5 +20,9 @@ class CourseAnnouncementSerializer(serializers.ModelSerializer):
 class SiteAnnouncementSerializer(serializers.ModelSerializer):
     class Meta:
         model = SiteAnnouncement
-        fields = ["id", "big_text", "small_text", "image", "link", "is_active", "created_at"]
+        fields = [
+            "id", "title_prefix", "main_title", "message",
+            "badges", "image", "cta_text", "cta_link",
+            "highlights", "is_active", "created_at",
+        ]
         read_only_fields = ["id", "created_at"]

@@ -13,6 +13,6 @@ class CourseAnnouncementAdmin(admin.ModelAdmin):
 
 @admin.register(SiteAnnouncement)
 class SiteAnnouncementAdmin(admin.ModelAdmin):
-    list_display = ["big_text", "is_active", "created_at"]
+    list_display = ["main_title", "is_active", "created_at"]
     list_filter = ["is_active"]
     readonly_fields = ["created_at"]
