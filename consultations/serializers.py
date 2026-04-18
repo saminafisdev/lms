@@ -13,7 +13,7 @@ class RecurringAvailabilitySerializer(serializers.ModelSerializer):
             "start_time", "end_time", "session_duration_minutes",
             "valid_from", "valid_until",
         ]
-        read_only_fields = ["id", "weekday_display"]
+        read_only_fields = ["id", "weekday_display", "consultation"]
 
 
 class AvailableTimeslotSerializer(serializers.ModelSerializer):
@@ -22,6 +22,7 @@ class AvailableTimeslotSerializer(serializers.ModelSerializer):
     class Meta:
         model = AvailableTimeslot
         fields = "__all__"
+        read_only_fields = ["consultation", "zoom_meeting_id", "zoom_join_url", "zoom_start_url", "is_booked"]
 
     def get_zoom_start_url(self, obj):
         request = self.context.get("request")
