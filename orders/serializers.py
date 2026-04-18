@@ -91,12 +91,24 @@ class OrderSerializer(serializers.ModelSerializer):
             "id",
             "order_type",
             "status",
+            "fulfillment_status",
             "total_amount",
             "items",
             "shipping_address",
             "created_at",
         ]
         read_only_fields = fields
+
+
+class UpdateFulfillmentSerializer(serializers.Serializer):
+    fulfillment_status = serializers.ChoiceField(
+        choices=[
+            Order.FulfillmentStatus.PROCESSING,
+            Order.FulfillmentStatus.SHIPPED,
+            Order.FulfillmentStatus.DELIVERED,
+            Order.FulfillmentStatus.CANCELLED,
+        ]
+    )
 
 
 class DirectPurchaseSerializer(serializers.Serializer):

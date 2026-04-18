@@ -15,7 +15,7 @@ from config.permissions import IsAdminRole
 from courses.models import Enrollment
 from email_templates.sendgrid import send_email, send_plain_email
 from orders.models import ShippingAddress
-from orders.serializers import BookSaleSerializer
+from orders.serializers import BookSaleSerializer, UpdateFulfillmentSerializer
 from orders.stripe import construct_webhook_event, create_checkout_session, create_payment_intent
 from config.tasks import send_email_task, create_zoom_meeting_for_slot_task
 
@@ -165,6 +165,30 @@ class OrderViewSet(viewsets.ViewSet):
                 )
         return Response(OrderSerializer(order).data)
 
+    @extend_schema(
+        request=UpdateFulfillmentSerializer,
+        responses={200: OrderSerializer},
+    )
+    @action(detail=True, methods=["patch"], url_path="fulfillment", permission_classes=[IsAdminRole])
+    def update_fulfillment(self, request, pk=None):
+        """PATCH /orders/{id}/fulfillment/ — admin updates delivery status."""
+        try:
+            order = Order.objects.get(id=pk)
+        except Order.DoesNotExist:
+            return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if order.order_type != Order.OrderType.CART:
+            return Response(
+                {"error": "Fulfillment status only applies to physical book orders."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = UpdateFulfillmentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        order.fulfillment_status = serializer.validated_data["fulfillment_status"]
+        order.save(update_fields=["fulfillment_status"])
+        return Response(OrderSerializer(order).data)
+
     @extend_schema(request=DirectPurchaseSerializer, responses={201: OrderSerializer})
     @action(detail=False, methods=["post"], url_path="direct")
     def direct_purchase(self, request):
@@ -182,7 +206,10 @@ class OrderViewSet(viewsets.ViewSet):
         price = serializer.validated_data["price"]
 
         order = Order.objects.create(
-            user=request.user, order_type="direct", status="pending", total_amount=price
+            user=request.user,
+            order_type=Order.OrderType.DIRECT,
+            status=Order.PaymentStatus.PENDING,
+            total_amount=price,
         )
 
         course = obj if item_type == "course" else None
@@ -254,7 +281,10 @@ class OrderViewSet(viewsets.ViewSet):
 
         total = cart.get_total()
         order = Order.objects.create(
-            user=request.user, order_type="cart", status="pending", total_amount=total
+            user=request.user,
+            order_type=Order.OrderType.CART,
+            status=Order.PaymentStatus.PENDING,
+            total_amount=total,
         )
 
         # Save shipping address
@@ -365,7 +395,7 @@ class StripeWebhookView(APIView):
                 order = Order.objects.get(id=order_id)
             except Order.DoesNotExist:
                 return
-            order.status = "completed"
+            order.status = Order.PaymentStatus.COMPLETED
             order.save()
             self._fulfill_order(order)
 
@@ -386,9 +416,9 @@ class StripeWebhookView(APIView):
             order = Order.objects.get(id=order_id)
         except Order.DoesNotExist:
             return
-        if order.status == "completed":
+        if order.status == Order.PaymentStatus.COMPLETED:
             return  # idempotency guard
-        order.status = "completed"
+        order.status = Order.PaymentStatus.COMPLETED
         order.save()
         self._fulfill_order(order)
 
@@ -412,8 +442,8 @@ class StripeWebhookView(APIView):
             return
         try:
             order = Order.objects.get(id=order_id)
-            if order.status == "pending":
-                order.status = "failed"
+            if order.status == Order.PaymentStatus.PENDING:
+                order.status = Order.PaymentStatus.FAILED
                 order.save()
         except Order.DoesNotExist:
             return
@@ -439,7 +469,7 @@ class StripeWebhookView(APIView):
                 return
             try:
                 order = Order.objects.get(id=order_id)
-                order.status = "failed"
+                order.status = Order.PaymentStatus.FAILED
                 order.save()
             except Order.DoesNotExist:
                 return
@@ -605,7 +635,9 @@ class StripeWebhookView(APIView):
                             ),
                         )
 
-            if order.order_type == "cart":
+            if order.order_type == Order.OrderType.CART:
+                order.fulfillment_status = Order.FulfillmentStatus.PROCESSING
+                order.save(update_fields=["fulfillment_status"])
                 Cart.objects.filter(user=order.user).first().items.all().delete()
                 send_email_task.delay(
                     to_email=order.user.email,
@@ -648,7 +680,8 @@ class BookSalesViewSet(viewsets.ViewSet):
 
         # Filter by payment status
         payment_status = request.query_params.get("status")
-        if payment_status in ["pending", "completed", "failed"]:
+        valid_statuses = Order.PaymentStatus.values
+        if payment_status in valid_statuses:
             queryset = queryset.filter(order__status=payment_status)
 
         # Filter by date range

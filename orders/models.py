@@ -36,19 +36,32 @@ class CartItem(models.Model):
 
 
 class Order(models.Model):
-    STATUS_CHOICES = (
-        ("pending", "Pending"),
-        ("completed", "Completed"),
-        ("failed", "Failed"),
-    )
-    TYPE_CHOICES = (
-        ("direct", "Direct"),  # course, bundle, digital book
-        ("cart", "Cart"),  # physical books
-    )
+    class PaymentStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
+    class OrderType(models.TextChoices):
+        DIRECT = "direct", "Direct"  # course, bundle, digital book
+        CART = "cart", "Cart"  # physical books
+
+    class FulfillmentStatus(models.TextChoices):
+        NOT_APPLICABLE = "not_applicable", "Not Applicable"  # digital orders
+        PROCESSING = "processing", "Processing"
+        SHIPPED = "shipped", "Shipped"
+        DELIVERED = "delivered", "Delivered"
+        CANCELLED = "cancelled", "Cancelled"
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="orders")
-    order_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    order_type = models.CharField(max_length=10, choices=OrderType.choices)
+    status = models.CharField(
+        max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PENDING
+    )
+    fulfillment_status = models.CharField(
+        max_length=20,
+        choices=FulfillmentStatus.choices,
+        default=FulfillmentStatus.NOT_APPLICABLE,
+    )
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_reference = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
