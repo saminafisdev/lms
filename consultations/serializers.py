@@ -56,7 +56,7 @@ class ConsultationSerializer(serializers.ModelSerializer):
             teacher = TeacherProfile.objects.get(pk=value)
         except TeacherProfile.DoesNotExist:
             raise serializers.ValidationError("Teacher not found.")
-        if not teacher.offers_consultation:
+        if not teacher.offers_consultations:
             raise serializers.ValidationError(
                 "This teacher does not offer consultations. "
                 "Enable 'offers_consultation' on their profile first."
