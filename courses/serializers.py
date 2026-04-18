@@ -206,8 +206,8 @@ class LessonSerializer(serializers.ModelSerializer):
             data["zoom_join_url"] = None
             data["zoom_start_url"] = None
             data["bunny_embed_url"] = None
-        elif live_status != "live":
-            # Accessible but class not currently live — hide join URL
+        elif live_status not in ("live", "upcoming"):
+            # Accessible but not yet in the 30-min window — hide join URL
             data["zoom_join_url"] = None
 
         return data
