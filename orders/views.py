@@ -700,8 +700,10 @@ class BookSalesViewSet(viewsets.ViewSet):
                 | models.Q(book__title__icontains=search)
             )
 
-        serializer = BookSaleSerializer(queryset, many=True)
-        return Response(serializer.data)
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = BookSaleSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(responses={200: BookSaleSerializer})
     def retrieve(self, request, pk=None):
