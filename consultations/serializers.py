@@ -70,7 +70,14 @@ class ConsultationPurchaseSerializer(serializers.ModelSerializer):
     student_email = serializers.EmailField(source="student.email", read_only=True)
     student_name = serializers.SerializerMethodField()
     consultation_title = serializers.CharField(source="consultation.title", read_only=True)
-    booked_slots = AvailableTimeslotSerializer(many=True, read_only=True)
+    booked_slots = serializers.SerializerMethodField()
+
+    def get_booked_slots(self, obj):
+        return AvailableTimeslotSerializer(
+            obj.booked_slots.all(),
+            many=True,
+            context=self.context,
+        ).data
     bundle_applied = ConsultationBundleSerializer(read_only=True)
 
     class Meta:
