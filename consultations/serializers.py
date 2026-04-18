@@ -50,6 +50,19 @@ class ConsultationSerializer(serializers.ModelSerializer):
         model = Consultation
         fields = "__all__"
 
+    def validate_teacher_id(self, value):
+        from accounts.models import TeacherProfile
+        try:
+            teacher = TeacherProfile.objects.get(pk=value)
+        except TeacherProfile.DoesNotExist:
+            raise serializers.ValidationError("Teacher not found.")
+        if not teacher.offers_consultation:
+            raise serializers.ValidationError(
+                "This teacher does not offer consultations. "
+                "Enable 'offers_consultation' on their profile first."
+            )
+        return value
+
 
 class ConsultationPurchaseSerializer(serializers.ModelSerializer):
     """Detailed read serializer — used for admin views and student purchase history."""
