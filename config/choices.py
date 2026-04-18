@@ -2,6 +2,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from orders.models import Order
+
 
 def _choices(pairs):
     return [{"value": v, "label": l} for v, l in pairs]
@@ -49,15 +51,9 @@ def choices_view(request):
             ]),
         },
         "order": {
-            "status": _choices([
-                ("pending", "Pending"),
-                ("completed", "Completed"),
-                ("failed", "Failed"),
-            ]),
-            "type": _choices([
-                ("direct", "Direct"),
-                ("cart", "Cart"),
-            ]),
+            "status": _choices(Order.PaymentStatus.choices),
+            "fulfillment_status": _choices(Order.FulfillmentStatus.choices),
+            "type": _choices(Order.OrderType.choices),
             "item_type": _choices([
                 ("course", "Course"),
                 ("bundle", "Bundle"),
