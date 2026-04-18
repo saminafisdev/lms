@@ -66,6 +66,13 @@ class ConsultationSerializer(serializers.ModelSerializer):
         return value
 
 
+class TimeslotSlimSerializer(serializers.ModelSerializer):
+    """Minimal serializer for student-facing timeslot listing."""
+    class Meta:
+        model = AvailableTimeslot
+        fields = ["id", "start_time", "end_time", "is_booked"]
+
+
 class ConsultationBookSerializer(serializers.Serializer):
     timeslot_ids = serializers.ListField(child=serializers.IntegerField(), min_length=1)
 

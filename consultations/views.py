@@ -16,6 +16,7 @@ from .serializers import (
     ConsultationPurchaseSerializer,
     ConsultationSerializer,
     RecurringAvailabilitySerializer,
+    TimeslotSlimSerializer,
 )
 
 
@@ -209,11 +210,21 @@ class AvailableTimeslotViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated()]
         return [IsAdminRole()]
 
+    def get_serializer_class(self):
+        user = getattr(self.request, "user", None)
+        is_admin = user and (user.is_staff or getattr(user, "role", None) == "admin")
+        if self.action in ("list", "retrieve") and not is_admin:
+            return TimeslotSlimSerializer
+        return AvailableTimeslotSerializer
+
     def get_queryset(self):
         queryset = AvailableTimeslot.objects.all()
         if "consultation_pk" in self.kwargs:
             queryset = queryset.filter(consultation_id=self.kwargs["consultation_pk"])
-        return queryset
+        date = self.request.query_params.get("date")
+        if date:
+            queryset = queryset.filter(day=date)
+        return queryset.order_by("start_time")
 
     def perform_create(self, serializer):
         if "consultation_pk" in self.kwargs:
