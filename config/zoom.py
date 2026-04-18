@@ -2,6 +2,7 @@ import base64
 import logging
 import time
 from datetime import timedelta
+from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
 
 import requests
 from django.conf import settings
@@ -85,7 +86,15 @@ def get_available_host(start_datetime, duration_minutes, exclude_lesson_pk=None)
     )
 
 
-def create_meeting(topic, start_datetime, duration_minutes, agenda="", host_email=None, exclude_lesson_pk=None):
+def _strip_zoom_token(url):
+    """Remove the tk= auth token from a Zoom join URL so it's not pre-authenticated."""
+    parsed = urlparse(url)
+    params = {k: v for k, v in parse_qs(parsed.query).items() if k != "tk"}
+    clean_query = urlencode({k: v[0] for k, v in params.items()})
+    return urlunparse(parsed._replace(query=clean_query))
+
+
+(topic, start_datetime, duration_minutes, agenda="", host_email=None, exclude_lesson_pk=None):
     """
     Creates a Zoom scheduled meeting.
 
@@ -130,7 +139,7 @@ def create_meeting(topic, start_datetime, duration_minutes, agenda="", host_emai
 
     return {
         "meeting_id": str(data["id"]),
-        "join_url": data["join_url"],
+        "join_url": _strip_zoom_token(data["join_url"]),
         "start_url": data["start_url"],
         "host_email": host_email,
     }
