@@ -5,7 +5,7 @@ from djoser.serializers import (
 )
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
-from .models import TeacherProfile, StudentProfile
+from .models import TeacherProfile, StudentProfile, NewsletterSubscriber
 
 User = get_user_model()
 
@@ -150,3 +150,14 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         student_profile.save()
 
         return student_profile
+
+
+class NewsletterSubscribeSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class NewsletterSubscriberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NewsletterSubscriber
+        fields = ["id", "email", "subscribed_at", "is_active"]
+        read_only_fields = fields

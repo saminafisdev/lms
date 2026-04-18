@@ -13,11 +13,13 @@ from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from config.sendgrid_contacts import add_contact, remove_contact
 from config.permissions import IsAdminRole
 
-from .models import StudentProfile, TeacherProfile
+from .models import StudentProfile, TeacherProfile, NewsletterSubscriber
 from .permissions import IsTeacher
 from .serializers import (
     StudentProfileSerializer,
     TeacherProfileSerializer,
+    NewsletterSubscribeSerializer,
+    NewsletterSubscriberSerializer,
 )
 
 
@@ -230,3 +232,66 @@ class StudentDashboardView(APIView):
             "upcoming_sessions": AvailableTimeslotSerializer(upcoming_sessions, many=True, context={"request": request}).data,
             "next_live_class": LessonSerializer(next_live, context={"request": request}).data if next_live else None,
         })
+
+
+class NewsletterSubscribeView(APIView):
+    """POST /newsletter/subscribe/ — public, no auth required."""
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(request=NewsletterSubscribeSerializer, responses={200: None})
+    def post(self, request):
+        serializer = NewsletterSubscribeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"]
+        subscriber, created = NewsletterSubscriber.objects.get_or_create(email=email)
+        if not created and subscriber.is_active:
+            return Response({"detail": "Already subscribed."})
+        subscriber.is_active = True
+        subscriber.save(update_fields=["is_active"])
+        return Response({"detail": "Successfully subscribed to newsletter."})
+
+
+class NewsletterUnsubscribeView(APIView):
+    """POST /newsletter/unsubscribe/ — public, no auth required."""
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(request=NewsletterSubscribeSerializer, responses={200: None})
+    def post(self, request):
+        serializer = NewsletterSubscribeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"]
+        updated = NewsletterSubscriber.objects.filter(email=email).update(is_active=False)
+        if not updated:
+            return Response({"detail": "Email not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"detail": "Successfully unsubscribed."})
+
+
+class NewsletterSubscriberViewSet(viewsets.ViewSet):
+    """Admin-only — manage newsletter subscribers."""
+    permission_classes = [IsAdminRole]
+
+    @extend_schema(responses={200: NewsletterSubscriberSerializer(many=True)})
+    def list(self, request):
+        """GET /newsletter/subscribers/ — list all subscribers."""
+        from config.pagination import StandardPagination
+        active_only = request.query_params.get("active")
+        qs = NewsletterSubscriber.objects.all()
+        if active_only == "true":
+            qs = qs.filter(is_active=True)
+        elif active_only == "false":
+            qs = qs.filter(is_active=False)
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(qs, request)
+        return paginator.get_paginated_response(
+            NewsletterSubscriberSerializer(page, many=True).data
+        )
+
+    @extend_schema(responses={204: None})
+    def destroy(self, request, pk=None):
+        """DELETE /newsletter/subscribers/{id}/ — remove a subscriber."""
+        try:
+            subscriber = NewsletterSubscriber.objects.get(pk=pk)
+        except NewsletterSubscriber.DoesNotExist:
+            return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        subscriber.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
