@@ -1,4 +1,5 @@
 from courses.models import LessonCompletion
+from datetime import timedelta
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import permissions, status
