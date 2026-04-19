@@ -64,6 +64,16 @@ class CourseFilter(django_filters.FilterSet):
         fields = ["category", "status", "teacher"]
 
 
+@extend_schema_view(
+    list=extend_schema(
+        description=(
+            "List courses. Results are filtered by role:\n\n"
+            "- **Admin / staff** — all courses (active and inactive).\n"
+            "- **Teacher** — only courses assigned to the authenticated teacher.\n"
+            "- **Student / unauthenticated** — active courses only."
+        )
+    )
+)
 class CourseViewSet(viewsets.ModelViewSet):
     serializer_class = CourseSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
