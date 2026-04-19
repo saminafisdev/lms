@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import transaction
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
 from rest_framework import permissions, serializers as drf_serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -129,6 +130,17 @@ class ConsultationViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="month",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Month to fetch availability for, in YYYY-MM format (e.g. 2026-04).",
+            )
+        ]
+    )
     @action(detail=True, methods=["get"], url_path="calendar", permission_classes=[permissions.IsAuthenticated])
     def calendar(self, request, pk=None):
         """
@@ -202,6 +214,19 @@ class RecurringAvailabilityViewSet(viewsets.ModelViewSet):
             serializer.save()
 
 
+@extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="date",
+                type=OpenApiTypes.DATE,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Filter timeslots by a specific day (YYYY-MM-DD).",
+            )
+        ]
+    )
+)
 class AvailableTimeslotViewSet(viewsets.ModelViewSet):
     serializer_class = AvailableTimeslotSerializer
 
