@@ -1208,7 +1208,7 @@ class TeacherDashboardView(viewsets.ViewSet):
     """
     GET /teacher/dashboard/
     Returns stats and lists for the teacher dashboard:
-      - active_courses, live_sessions_today, uploaded_content
+      - active_courses, live_sessions_today
       - upcoming_live_sessions (next 5)
       - recent_uploads (last 5 non-live lessons)
     """
@@ -1228,8 +1228,7 @@ class TeacherDashboardView(viewsets.ViewSet):
             "| Field | Description |\n"
             "|---|---|\n"
             "| `active_courses` | Number of published courses assigned to this teacher |\n"
-            "| `live_sessions_today` | Live lessons scheduled for today (UTC) |\n"
-            "| `uploaded_content` | Total lessons (all types) across teacher's courses |\n\n"
+            "| `live_sessions_today` | Live lessons scheduled for today (UTC) |\n\n"
             "**`upcoming_live_sessions`** — next 5 live lessons, soonest first. "
             "Each item includes `live_status`, `enrolled_count`, `zoom_start_url`, "
             "`scheduled_at`, and `duration_in_minutes`.\n\n"
@@ -1246,9 +1245,6 @@ class TeacherDashboardView(viewsets.ViewSet):
                     ),
                     "live_sessions_today": drf_fields.IntegerField(
                         help_text="Live lessons scheduled for today (UTC)."
-                    ),
-                    "uploaded_content": drf_fields.IntegerField(
-                        help_text="Total lessons across all teacher's courses."
                     ),
                     "upcoming_live_sessions": LiveLessonSerializer(
                         many=True,
@@ -1301,10 +1297,6 @@ class TeacherDashboardView(viewsets.ViewSet):
             scheduled_at__lt=today_end,
         ).count()
 
-        uploaded_content = Lesson.objects.filter(
-            module__course__id__in=course_ids
-        ).count()
-
         upcoming_qs = (
             Lesson.objects.filter(
                 content_type="live",
@@ -1336,7 +1328,6 @@ class TeacherDashboardView(viewsets.ViewSet):
         return Response({
             "active_courses": courses_qs.count(),
             "live_sessions_today": live_sessions_today,
-            "uploaded_content": uploaded_content,
             "upcoming_live_sessions": LiveLessonSerializer(
                 upcoming_qs, many=True, context={"request": request}
             ).data,
