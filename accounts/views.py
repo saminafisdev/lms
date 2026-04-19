@@ -91,6 +91,27 @@ class StudentProfileViewSet(viewsets.ModelViewSet):
         elif old_subscribed and not new_subscribed:
             remove_contact(profile.user)
 
+    @action(detail=False, methods=["get", "patch"], url_path="me", permission_classes=[IsAuthenticated])
+    def me(self, request):
+        try:
+            profile = request.user.student_profile
+        except StudentProfile.DoesNotExist:
+            return Response({"detail": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == "PATCH":
+            serializer = StudentProfileSerializer(profile, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            old_subscribed = profile.is_subscribed_to_newsletter
+            profile = serializer.save()
+            new_subscribed = profile.is_subscribed_to_newsletter
+            if not old_subscribed and new_subscribed:
+                add_contact(profile.user)
+            elif old_subscribed and not new_subscribed:
+                remove_contact(profile.user)
+            return Response(serializer.data)
+
+        return Response(StudentProfileSerializer(profile).data)
+
     @action(
         detail=False,
         methods=["post"],
