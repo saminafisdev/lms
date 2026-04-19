@@ -178,17 +178,17 @@ class ConsultationViewSet(viewsets.ModelViewSet):
         for slot in slots:
             day_str = slot.day.isoformat()
             if day_str not in calendar_data:
-                calendar_data[day_str] = {"status": None, "slots": []}
-            calendar_data[day_str]["slots"].append({
-                "id": slot.id,
-                "start_time": slot.start_time.strftime("%H:%M"),
-                "end_time": slot.end_time.strftime("%H:%M"),
-                "is_booked": slot.is_booked,
-            })
+                calendar_data[day_str] = {"status": None, "booked": 0, "total": 0}
+            calendar_data[day_str]["total"] += 1
+            if slot.is_booked:
+                calendar_data[day_str]["booked"] += 1
 
         for day_data in calendar_data.values():
-            all_booked = all(s["is_booked"] for s in day_data["slots"])
-            day_data["status"] = "fully_booked" if all_booked else "available"
+            day_data["status"] = (
+                "fully_booked" if day_data["booked"] == day_data["total"] else "available"
+            )
+            del day_data["booked"]
+            del day_data["total"]
 
         return Response(calendar_data)
 
