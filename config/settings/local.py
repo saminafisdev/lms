@@ -33,4 +33,4 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 # ---------------------------------------------------------------------------
 # Media — use local filesystem, not Bunny
 # ---------------------------------------------------------------------------
-USE_BUNNY_STORAGE = False
+USE_BUNNY_STORAGE = env.bool("USE_BUNNY_STORAGE", default=False)
