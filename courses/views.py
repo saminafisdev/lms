@@ -1119,6 +1119,53 @@ class AssignmentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(AssignmentSubmissionSerializer(submission).data)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        summary="List teacher live sessions",
+        description=(
+            "Returns all live lessons belonging to the authenticated teacher's courses, "
+            "ordered by scheduled time (soonest first).\n\n"
+            "**Permissions:** Teacher or Admin only.\n\n"
+            "**Role behaviour:**\n"
+            "- Teacher — only sees live lessons from their own courses.\n"
+            "- Admin/staff — sees all live lessons across all courses.\n\n"
+            "**`?status` filter values:**\n"
+            "| Value | Description |\n"
+            "|---|---|\n"
+            "| `upcoming` | `scheduled_at` is in the future |\n"
+            "| `live` | session has started but may not have ended |\n"
+            "| `completed` | `scheduled_at` is in the past |\n\n"
+            "**`live_status` field on each item** (computed):\n"
+            "| Value | Meaning |\n"
+            "|---|---|\n"
+            "| `scheduled` | More than 30 min before start |\n"
+            "| `upcoming` | Within 30 min of start |\n"
+            "| `live` | Currently in progress |\n"
+            "| `completed` | Session ended |\n"
+            "| `null` | No `scheduled_at` set |\n\n"
+            "Use `zoom_start_url` for the **Start Session** button (host link).\n"
+            "Use `zoom_join_url` for the student join link."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="status",
+                description="Filter by session state: `upcoming`, `live`, or `completed`.",
+                required=False,
+                type=str,
+                enum=["upcoming", "live", "completed"],
+            )
+        ],
+        responses={200: LiveLessonSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        summary="Get a single live session",
+        description=(
+            "Returns full details for one live lesson, including Zoom URLs and `live_status`.\n\n"
+            "**Permissions:** Teacher or Admin only."
+        ),
+        responses={200: LiveLessonSerializer},
+    ),
+)
 class TeacherLiveSessionViewSet(viewsets.ReadOnlyModelViewSet):
     """
     GET /teacher/live-sessions/         → all live lessons for the authenticated teacher
@@ -1170,35 +1217,66 @@ class TeacherDashboardView(viewsets.ViewSet):
         return [IsAdminOrTeacher()]
 
     @extend_schema(
+        summary="Teacher dashboard summary",
+        description=(
+            "Returns a stats overview and content lists for the teacher's dashboard.\n\n"
+            "**Permissions:** Teacher or Admin only.\n\n"
+            "**Role behaviour:**\n"
+            "- Teacher — scoped to their own active courses.\n"
+            "- Admin/staff — scoped to all active courses.\n\n"
+            "**Stats fields:**\n"
+            "| Field | Description |\n"
+            "|---|---|\n"
+            "| `active_courses` | Number of published courses assigned to this teacher |\n"
+            "| `live_sessions_today` | Live lessons scheduled for today (UTC) |\n"
+            "| `uploaded_content` | Total lessons (all types) across teacher's courses |\n\n"
+            "**`upcoming_live_sessions`** — next 5 live lessons, soonest first. "
+            "Each item includes `live_status`, `enrolled_count`, `zoom_start_url`, "
+            "`scheduled_at`, and `duration_in_minutes`.\n\n"
+            "**`recent_uploads`** — last 5 non-live lessons added (by id desc). "
+            "Each item includes `id`, `title`, `course_title`, and `content_type` "
+            "(`video`, `document`, `quiz`, `assignment`, `external_link`)."
+        ),
         responses={
             200: inline_serializer(
                 name="TeacherDashboardResponse",
                 fields={
-                    "active_courses": drf_fields.IntegerField(),
-                    "live_sessions_today": drf_fields.IntegerField(),
-                    "uploaded_content": drf_fields.IntegerField(),
-                    "upcoming_live_sessions": LiveLessonSerializer(many=True),
+                    "active_courses": drf_fields.IntegerField(
+                        help_text="Published courses assigned to this teacher."
+                    ),
+                    "live_sessions_today": drf_fields.IntegerField(
+                        help_text="Live lessons scheduled for today (UTC)."
+                    ),
+                    "uploaded_content": drf_fields.IntegerField(
+                        help_text="Total lessons across all teacher's courses."
+                    ),
+                    "upcoming_live_sessions": LiveLessonSerializer(
+                        many=True,
+                        help_text="Next 5 live lessons, soonest first.",
+                    ),
                     "recent_uploads": inline_serializer(
                         name="RecentUploadItem",
                         fields={
                             "id": drf_fields.IntegerField(),
-                            "title": drf_fields.CharField(),
-                            "course_title": drf_fields.CharField(),
-                            "content_type": drf_fields.CharField(),
+                            "title": drf_fields.CharField(help_text="Lesson title."),
+                            "course_title": drf_fields.CharField(
+                                help_text="Title of the course this lesson belongs to."
+                            ),
+                            "content_type": drf_fields.ChoiceField(
+                                choices=["video", "document", "quiz", "assignment", "external_link"],
+                                help_text="Lesson type (excludes live sessions).",
+                            ),
                         },
                         many=True,
+                        help_text="Last 5 non-live lessons added, newest first.",
                     ),
                 },
-            )
+            ),
+            403: inline_serializer(
+                name="TeacherDashboardForbidden",
+                fields={"detail": drf_fields.CharField()},
+            ),
         },
-        description=(
-            "Teacher dashboard summary.\n\n"
-            "- **active_courses**: published courses assigned to this teacher.\n"
-            "- **live_sessions_today**: live lessons scheduled for today.\n"
-            "- **uploaded_content**: total lessons across all teacher's courses.\n"
-            "- **upcoming_live_sessions**: next 5 live lessons (soonest first).\n"
-            "- **recent_uploads**: last 5 non-live lessons added."
-        ),
     )
     def list(self, request):
         user = request.user
