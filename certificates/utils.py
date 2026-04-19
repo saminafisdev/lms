@@ -1,6 +1,26 @@
-import os
-from django.utils import timezone
+import requests
+from django.conf import settings
 from django.core.files.base import ContentFile
+
+
+def _read_template_html(template):
+    """
+    Read the HTML template file content.
+
+    django-bunny's _open() returns r.raw from a non-streaming request,
+    so r.raw.read() always yields empty bytes. We fetch the file directly
+    using requests when Bunny storage is active, and fall back to the
+    standard file API for local storage.
+    """
+    if getattr(settings, "USE_BUNNY_STORAGE", False):
+        url = template.html_file.url
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        return response.text
+    else:
+        with template.html_file.open("rb") as f:
+            raw = f.read()
+            return raw.decode("utf-8") if isinstance(raw, bytes) else raw
 
 
 def render_certificate_html(template, certificate):
@@ -23,9 +43,7 @@ def render_certificate_html(template, certificate):
     if not student_name:
         student_name = certificate.student.email
 
-    with template.html_file.open("rb") as f:
-        raw = f.read()
-        html_content = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+    html_content = _read_template_html(template)
 
     placeholders = {
         "{{student_name}}": student_name,
