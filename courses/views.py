@@ -40,6 +40,7 @@ from .serializers import (
     CourseCategorySerializer,
     ModuleSerializer,
     LessonSerializer,
+    LiveLessonSerializer,
     QuizSerializer,
     QuestionSerializer,
     OptionSerializer,
@@ -1116,3 +1117,150 @@ class AssignmentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
                 enrollment.check_completion()
 
         return Response(AssignmentSubmissionSerializer(submission).data)
+
+
+class TeacherLiveSessionViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    GET /teacher/live-sessions/         → all live lessons for the authenticated teacher
+    GET /teacher/live-sessions/?status=upcoming  → filter by status (scheduled|upcoming|live|completed)
+    """
+    serializer_class = LiveLessonSerializer
+
+    def get_permissions(self):
+        return [IsAdminOrTeacher()]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = (
+            Lesson.objects.filter(content_type="live")
+            .select_related("module", "module__course", "module__course__teacher")
+            .prefetch_related("module__course__enrollments")
+            .order_by("scheduled_at")
+        )
+        if user.is_staff or getattr(user, "role", None) == "admin":
+            pass  # admins see all
+        else:
+            qs = qs.filter(module__course__teacher__user=user)
+
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            now = timezone.now()
+            if status_filter == "upcoming":
+                qs = qs.filter(scheduled_at__gt=now)
+            elif status_filter == "live":
+                from django.db.models import F, ExpressionWrapper, DurationField
+                # roughly: scheduled_at <= now <= scheduled_at + duration
+                qs = qs.filter(scheduled_at__lte=now)
+            elif status_filter == "completed":
+                qs = qs.filter(scheduled_at__lt=now)
+
+        return qs
+
+
+class TeacherDashboardView(viewsets.ViewSet):
+    """
+    GET /teacher/dashboard/
+    Returns stats and lists for the teacher dashboard:
+      - active_courses, live_sessions_today, uploaded_content
+      - upcoming_live_sessions (next 5)
+      - recent_uploads (last 5 non-live lessons)
+    """
+
+    def get_permissions(self):
+        return [IsAdminOrTeacher()]
+
+    @extend_schema(
+        responses={
+            200: inline_serializer(
+                name="TeacherDashboardResponse",
+                fields={
+                    "active_courses": drf_fields.IntegerField(),
+                    "live_sessions_today": drf_fields.IntegerField(),
+                    "uploaded_content": drf_fields.IntegerField(),
+                    "upcoming_live_sessions": LiveLessonSerializer(many=True),
+                    "recent_uploads": inline_serializer(
+                        name="RecentUploadItem",
+                        fields={
+                            "id": drf_fields.IntegerField(),
+                            "title": drf_fields.CharField(),
+                            "course_title": drf_fields.CharField(),
+                            "content_type": drf_fields.CharField(),
+                        },
+                        many=True,
+                    ),
+                },
+            )
+        },
+        description=(
+            "Teacher dashboard summary.\n\n"
+            "- **active_courses**: published courses assigned to this teacher.\n"
+            "- **live_sessions_today**: live lessons scheduled for today.\n"
+            "- **uploaded_content**: total lessons across all teacher's courses.\n"
+            "- **upcoming_live_sessions**: next 5 live lessons (soonest first).\n"
+            "- **recent_uploads**: last 5 non-live lessons added."
+        ),
+    )
+    def list(self, request):
+        user = request.user
+        is_admin = user.is_staff or getattr(user, "role", None) == "admin"
+
+        if is_admin:
+            courses_qs = Course.objects.filter(is_active=True)
+        else:
+            courses_qs = Course.objects.filter(
+                teacher__user=user, is_active=True
+            )
+
+        course_ids = list(courses_qs.values_list("id", flat=True))
+
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+
+        live_sessions_today = Lesson.objects.filter(
+            content_type="live",
+            module__course__id__in=course_ids,
+            scheduled_at__gte=today_start,
+            scheduled_at__lt=today_end,
+        ).count()
+
+        uploaded_content = Lesson.objects.filter(
+            module__course__id__in=course_ids
+        ).count()
+
+        upcoming_qs = (
+            Lesson.objects.filter(
+                content_type="live",
+                module__course__id__in=course_ids,
+                scheduled_at__gte=timezone.now(),
+            )
+            .select_related("module", "module__course", "module__course__teacher")
+            .prefetch_related("module__course__enrollments")
+            .order_by("scheduled_at")[:5]
+        )
+
+        recent_uploads_qs = (
+            Lesson.objects.filter(module__course__id__in=course_ids)
+            .exclude(content_type="live")
+            .select_related("module__course")
+            .order_by("-id")[:5]
+        )
+
+        recent_uploads = [
+            {
+                "id": l.id,
+                "title": l.title,
+                "course_title": l.module.course.title,
+                "content_type": l.content_type,
+            }
+            for l in recent_uploads_qs
+        ]
+
+        return Response({
+            "active_courses": courses_qs.count(),
+            "live_sessions_today": live_sessions_today,
+            "uploaded_content": uploaded_content,
+            "upcoming_live_sessions": LiveLessonSerializer(
+                upcoming_qs, many=True, context={"request": request}
+            ).data,
+            "recent_uploads": recent_uploads,
+        })

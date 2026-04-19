@@ -213,6 +213,50 @@ class LessonSerializer(serializers.ModelSerializer):
         return data
 
 
+class LiveLessonSerializer(serializers.ModelSerializer):
+    """Used in teacher live-sessions list and dashboard upcoming sessions."""
+    course_id = serializers.IntegerField(source="module.course.id", read_only=True)
+    course_title = serializers.CharField(source="module.course.title", read_only=True)
+    module_title = serializers.CharField(source="module.title", read_only=True)
+    enrolled_count = serializers.SerializerMethodField()
+    live_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Lesson
+        fields = [
+            "id",
+            "title",
+            "course_id",
+            "course_title",
+            "module_title",
+            "scheduled_at",
+            "duration_in_minutes",
+            "live_status",
+            "enrolled_count",
+            "zoom_meeting_id",
+            "zoom_start_url",
+            "zoom_join_url",
+            "is_released",
+        ]
+
+    def get_enrolled_count(self, obj):
+        return obj.module.course.enrollments.count()
+
+    def get_live_status(self, obj):
+        if not obj.scheduled_at:
+            return None
+        now = timezone.now()
+        duration = timedelta(minutes=obj.duration_in_minutes or 60)
+        end_time = obj.scheduled_at + duration
+        if now >= obj.scheduled_at and now <= end_time:
+            return "live"
+        if now > end_time:
+            return "completed"
+        if now >= obj.scheduled_at - timedelta(minutes=30):
+            return "upcoming"
+        return "scheduled"
+
+
 class ModuleSerializer(serializers.ModelSerializer):
     lessons = LessonSerializer(many=True, read_only=True)
     total_lessons = serializers.SerializerMethodField()

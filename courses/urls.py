@@ -13,6 +13,8 @@ from .views import (
     AssignmentViewSet,
     AssignmentSubmissionViewSet,
     EnrollmentViewSet,
+    TeacherLiveSessionViewSet,
+    TeacherDashboardView,
 )
 
 router = routers.DefaultRouter()
@@ -41,6 +43,10 @@ question_router = routers.NestedDefaultRouter(
 )
 question_router.register(r"options", OptionViewSet, basename="question-options")
 
+teacher_router = routers.DefaultRouter()
+teacher_router.register(r"live-sessions", TeacherLiveSessionViewSet, basename="teacher-live-sessions")
+teacher_router.register(r"dashboard", TeacherDashboardView, basename="teacher-dashboard")
+
 urlpatterns = [
     path("", include(router.urls)),
     path("", include(course_router.urls)),
@@ -48,4 +54,5 @@ urlpatterns = [
     path("", include(lesson_router.urls)),
     path("", include(quiz_router.urls)),
     path("", include(question_router.urls)),
+    path("teacher/", include(teacher_router.urls)),
 ]
