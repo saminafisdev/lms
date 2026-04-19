@@ -70,7 +70,7 @@ class TimeslotSlimSerializer(serializers.ModelSerializer):
     """Minimal serializer for student-facing timeslot listing."""
     class Meta:
         model = AvailableTimeslot
-        fields = ["id", "start_time", "end_time", "is_booked"]
+        fields = ["id", "scheduled_start", "scheduled_end", "is_booked"]
 
 
 class ConsultationBookSerializer(serializers.Serializer):

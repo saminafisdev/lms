@@ -22,16 +22,13 @@ def send_email_task(self, to_email, purpose, template_data=None):
 def create_zoom_meeting_for_slot_task(self, slot_id, consultation_title, student_name):
     """Create a Zoom meeting for a consultation slot asynchronously."""
     try:
-        import datetime
         from config.zoom import create_meeting
         from consultations.models import AvailableTimeslot
         slot = AvailableTimeslot.objects.get(pk=slot_id)
-        start_dt = datetime.datetime.combine(slot.day, slot.start_time)
-        end_dt = datetime.datetime.combine(slot.day, slot.end_time)
-        duration = max(int((end_dt - start_dt).seconds / 60), 30)
+        duration = max(int((slot.scheduled_end - slot.scheduled_start).seconds / 60), 30)
         result = create_meeting(
             topic=f"Consultation: {consultation_title}",
-            start_datetime=start_dt,
+            start_datetime=slot.scheduled_start,
             duration_minutes=duration,
             agenda=f"Session with {student_name}",
         )

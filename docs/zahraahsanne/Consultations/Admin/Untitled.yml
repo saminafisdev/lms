@@ -1,0 +1,24 @@
+info:
+  name: Untitled
+  type: http
+  seq: 1
+
+http:
+  method: PATCH
+  url: "{{base_url}}/consultations/5/"
+  headers:
+    - name: Authorization
+      value: JWT {{access_token}}
+  body:
+    type: json
+    data: |-
+      {
+        "standard_price": 99.00
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

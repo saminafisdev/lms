@@ -180,13 +180,17 @@ class ConsultationViewSet(viewsets.ModelViewSet):
 
         slots = (
             AvailableTimeslot.objects
-            .filter(consultation=consultation, day__year=year, day__month=month)
-            .order_by("day", "start_time")
+            .filter(
+                consultation=consultation,
+                scheduled_start__year=year,
+                scheduled_start__month=month,
+            )
+            .order_by("scheduled_start")
         )
 
         calendar_data = {}
         for slot in slots:
-            day_str = slot.day.isoformat()
+            day_str = slot.scheduled_start.date().isoformat()
             if day_str not in calendar_data:
                 calendar_data[day_str] = {"status": None, "booked": 0, "total": 0}
             calendar_data[day_str]["total"] += 1
@@ -258,8 +262,8 @@ class AvailableTimeslotViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(consultation_id=self.kwargs["consultation_pk"])
         date = self.request.query_params.get("date")
         if date:
-            queryset = queryset.filter(day=date)
-        return queryset.order_by("start_time")
+            queryset = queryset.filter(scheduled_start__date=date)
+        return queryset.order_by("scheduled_start")
 
     def perform_create(self, serializer):
         if "consultation_pk" in self.kwargs:
@@ -317,12 +321,11 @@ class TeacherConsultationViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         from django.utils import timezone
-        today = timezone.now().date()
         return (
             AvailableTimeslot.objects.filter(
                 consultation__teacher__user=self.request.user,
                 is_booked=True,
-                day__gte=today,
+                scheduled_start__gte=timezone.now(),
             )
-            .order_by("day", "start_time")
+            .order_by("scheduled_start")
         )

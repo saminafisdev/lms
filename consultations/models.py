@@ -71,9 +71,8 @@ class AvailableTimeslot(models.Model):
         related_name="generated_slots",
         help_text="Set if this slot was auto-generated from a recurring rule",
     )
-    day = models.DateField()
-    start_time = models.TimeField()
-    end_time = models.TimeField()
+    scheduled_start = models.DateTimeField(help_text="Session start (UTC)")
+    scheduled_end = models.DateTimeField(help_text="Session end (UTC)")
     is_booked = models.BooleanField(default=False)
 
     zoom_meeting_id = models.CharField(max_length=255, blank=True, null=True)
@@ -81,15 +80,13 @@ class AvailableTimeslot(models.Model):
     zoom_start_url = models.URLField(max_length=1000, blank=True, null=True)
 
     def __str__(self):
-        return (
-            f"{self.consultation.title} - {self.day} {self.start_time}-{self.end_time}"
-        )
+        return f"{self.consultation.title} - {self.scheduled_start} → {self.scheduled_end}"
 
     class Meta:
-        ordering = ["day", "start_time"]
+        ordering = ["scheduled_start"]
         indexes = [
             models.Index(fields=["consultation", "is_booked"], name="ts_consult_booked_idx"),
-            models.Index(fields=["day", "is_booked"], name="ts_day_booked_idx"),
+            models.Index(fields=["scheduled_start", "is_booked"], name="ts_start_booked_idx"),
         ]
 
 

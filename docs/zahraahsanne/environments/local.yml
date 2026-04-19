@@ -3,6 +3,6 @@ variables:
   - name: base_url
     value: 10.10.13.8:8000
   - name: access_token
-    value: ""
+    value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc4NjYyNTUwLCJpYXQiOjE3NzYwNzA1NTAsImp0aSI6Ijc3MDEzMzBhYTFlZTQwM2U4Mjg5ODMyYjQzMDZlOGFmIiwidXNlcl9pZCI6IjEifQ.f-ByD8lepRu7NGBh4YBklLMqS3zntBaUe7IfniXDv-8
   - name: refresh_token
     value: ""

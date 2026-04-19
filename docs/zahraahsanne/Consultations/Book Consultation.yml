@@ -1,0 +1,24 @@
+info:
+  name: Book Consultation
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{base_url}}/consultations/5/book/"
+  headers:
+    - name: Authorization
+      value: JWT {{access_token}}
+  body:
+    type: json
+    data: |-
+      {
+        "timeslot_id": [38, 39, 40]
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

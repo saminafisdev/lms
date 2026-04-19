@@ -538,7 +538,7 @@ class StripeWebhookView(APIView):
 
         # Send confirmation email
         slot_list = ", ".join(
-            f"{s.day} {s.start_time}–{s.end_time}"
+            f"{s.scheduled_start.strftime('%Y-%m-%d %H:%M')}–{s.scheduled_end.strftime('%H:%M')} UTC"
             for s in purchase.booked_slots.all()
         )
         send_email_task.delay(

@@ -214,15 +214,15 @@ class StudentDashboardView(APIView):
             .order_by("-created_at")[:10]
         )
 
-        # Upcoming consultation sessions — filter by day, not time
+        # Upcoming consultation sessions
         upcoming_sessions = list(
             AvailableTimeslot.objects.filter(
                 purchases__student=user,
                 purchases__status="confirmed",
-                day__gte=now.date(),
+                scheduled_start__gte=now,
             )
             .select_related("consultation", "consultation__teacher", "consultation__teacher__user")
-            .order_by("day", "start_time")[:5]
+            .order_by("scheduled_start")[:5]
         )
 
         # Next live class from enrolled courses
