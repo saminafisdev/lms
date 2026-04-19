@@ -254,7 +254,10 @@ class BundleViewSet(viewsets.ModelViewSet):
     filterset_fields = ["is_active"]
 
     def get_queryset(self):
-        return Bundle.objects.prefetch_related("courses").all()
+        qs = Bundle.objects.prefetch_related("courses").all()
+        if not self.request.user or not self.request.user.is_staff:
+            qs = qs.filter(is_active=True)
+        return qs
 
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
