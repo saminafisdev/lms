@@ -23,8 +23,9 @@ def render_certificate_html(template, certificate):
     if not student_name:
         student_name = certificate.student.email
 
-    with template.html_file.open("r") as f:
-        html_content = f.read()
+    with template.html_file.open("rb") as f:
+        raw = f.read()
+        html_content = raw.decode("utf-8") if isinstance(raw, bytes) else raw
 
     placeholders = {
         "{{student_name}}": student_name,
