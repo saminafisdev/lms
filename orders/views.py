@@ -1,5 +1,7 @@
 import logging
 import stripe as stripe_lib
+
+logger = logging.getLogger(__name__)
 from django.conf import settings
 from django.db import models
 from django.utils.decorators import method_decorator
@@ -13,11 +15,10 @@ from rest_framework.views import APIView
 from config.pagination import StandardPagination
 from config.permissions import IsAdminRole
 from courses.models import Enrollment
-from email_templates.sendgrid import send_email, send_plain_email
+from config.tasks import send_email_task, create_zoom_meeting_for_slot_task
 from orders.models import ShippingAddress
 from orders.serializers import BookSaleSerializer, UpdateFulfillmentSerializer
 from orders.stripe import construct_webhook_event, create_checkout_session, create_payment_intent
-from config.tasks import send_email_task, create_zoom_meeting_for_slot_task
 
 from .models import Cart, CartItem, Order, OrderItem
 from .serializers import (
@@ -357,22 +358,22 @@ class StripeWebhookView(APIView):
             try:
                 self._handle_payment_success(event["data"]["object"])
             except Exception as e:
-                logging.getLogger(__name__).error(f"Webhook fulfillment error: {e}", exc_info=True)
+                logger.error(f"Webhook fulfillment error: {e}", exc_info=True)
         elif event["type"] == "checkout.session.completed":
             try:
                 self._handle_checkout_session_completed(event["data"]["object"])
             except Exception as e:
-                logging.getLogger(__name__).error(f"Webhook checkout session error: {e}", exc_info=True)
+                logger.error(f"Webhook checkout session error: {e}", exc_info=True)
         elif event["type"] == "checkout.session.expired":
             try:
                 self._handle_checkout_session_expired(event["data"]["object"])
             except Exception as e:
-                logging.getLogger(__name__).error(f"Webhook checkout session expired error: {e}", exc_info=True)
+                logger.error(f"Webhook checkout session expired error: {e}", exc_info=True)
         elif event["type"] == "payment_intent.payment_failed":
             try:
                 self._handle_payment_failed(event["data"]["object"])
             except Exception as e:
-                logging.getLogger(__name__).error(f"Webhook failure handler error: {e}", exc_info=True)
+                logger.error(f"Webhook failure handler error: {e}", exc_info=True)
 
         return Response({"status": "ok"})
 
@@ -520,7 +521,7 @@ class StripeWebhookView(APIView):
                     purchase.student.first_name or purchase.student.email,
                 )
             except Exception as e:
-                logging.getLogger(__name__).error(
+                logger.error(
                     f"Failed to queue Zoom meeting task for slot {slot.pk}: {e}"
                 )
 
@@ -529,7 +530,7 @@ class StripeWebhookView(APIView):
             f"{s.day} {s.start_time}–{s.end_time}"
             for s in purchase.booked_slots.all()
         )
-        sent = send_email_task.delay(
+        send_email_task.delay(
             to_email=purchase.student.email,
             purpose="consultation_purchase",
             template_data={
@@ -540,20 +541,11 @@ class StripeWebhookView(APIView):
                 "amount": str(purchase.total_price_paid),
             },
         )
-        if not sent:
-            send_plain_email(
-                to_email=purchase.student.email,
-                subject=f"Booking confirmed: {purchase.consultation.title}",
-                body=(
-                    f"Hi {purchase.student.first_name or 'there'},\n\n"
-                    f"Your consultation booking is confirmed.\n"
-                    f"Consultation: {purchase.consultation.title}\n"
-                    f"Sessions: {purchase.sessions_purchased}\n"
-                    f"Slots: {slot_list}\n"
-                    f"Amount paid: {purchase.total_price_paid}\n\n"
-                    "We look forward to seeing you!"
-                ),
-            )
+        logger.info(
+            "Queued consultation_purchase email to %s for consultation %s",
+            purchase.student.email,
+            purchase.consultation.title,
+        )
 
     def _fulfill_membership(self, metadata):
         from memberships.models import UserMembership
@@ -584,6 +576,11 @@ class StripeWebhookView(APIView):
                 "end_date": membership.end_date.strftime("%Y-%m-%d"),
             },
         )
+        logger.info(
+            "Queued membership_purchase email to %s for plan %s",
+            membership.user.email,
+            membership.plan.name if membership.plan else "Membership",
+        )
 
     def _fulfill_donation(self, metadata):
         from donations.models import Donation
@@ -611,6 +608,11 @@ class StripeWebhookView(APIView):
                             "amount": str(order.total_amount),
                         },
                     )
+                    logger.info(
+                        "Queued book_purchase email to %s for book %s",
+                        order.user.email,
+                        item.book.title,
+                    )
 
                 elif item.item_type == "course":
                     Enrollment.objects.get_or_create(user=order.user, course=item.course)
@@ -623,6 +625,11 @@ class StripeWebhookView(APIView):
                             "amount": str(order.total_amount),
                         },
                     )
+                    logger.info(
+                        "Queued course_purchase email to %s for course %s",
+                        order.user.email,
+                        item.course.title,
+                    )
 
                 elif item.item_type == "bundle":
                     bundle = item.bundle
@@ -630,7 +637,7 @@ class StripeWebhookView(APIView):
                     for course in courses:
                         Enrollment.objects.get_or_create(user=order.user, course=course)
                     course_names = ", ".join(c.title for c in courses)
-                    sent = send_email_task.delay(
+                    send_email_task.delay(
                         to_email=order.user.email,
                         purpose="bundle_purchase",
                         template_data={
@@ -640,18 +647,11 @@ class StripeWebhookView(APIView):
                             "amount": str(order.total_amount),
                         },
                     )
-                    if not sent:
-                        send_plain_email(
-                            to_email=order.user.email,
-                            subject=f"You've purchased {bundle.name}!",
-                            body=(
-                                f"Hi {order.user.first_name or 'there'},\n\n"
-                                f"Thank you for purchasing the {bundle.name} bundle.\n"
-                                f"You now have access to: {course_names}.\n\n"
-                                f"Amount paid: {order.total_amount}\n\n"
-                                "Happy learning!"
-                            ),
-                        )
+                    logger.info(
+                        "Queued bundle_purchase email to %s for bundle %s",
+                        order.user.email,
+                        bundle.name,
+                    )
 
             if order.order_type == Order.OrderType.CART:
                 order.fulfillment_status = Order.FulfillmentStatus.PROCESSING
@@ -668,6 +668,11 @@ class StripeWebhookView(APIView):
                         "format": "Physical",
                         "amount": str(order.total_amount),
                     },
+                )
+                logger.info(
+                    "Queued physical book_purchase email to %s for order %s",
+                    order.user.email,
+                    order.id,
                 )
 
 

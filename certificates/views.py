@@ -1,8 +1,9 @@
 import logging
 from django.db import models as db_models
 from django.http import HttpResponse
-from drf_spectacular.utils import extend_schema
-from rest_framework import permissions, status, viewsets
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from drf_spectacular.types import OpenApiTypes
+from rest_framework import permissions, serializers as drf_serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -129,7 +130,44 @@ class CertificateViewSet(viewsets.ViewSet):
 
     @extend_schema(
         request=IssueCertificateSerializer,
-        responses={201: CertificateSerializer(many=True)},
+        responses={
+            201: inline_serializer(
+                name="IssueCertificateResponse",
+                fields={
+                    "issued": CertificateSerializer(many=True),
+                    "skipped": drf_serializers.ListField(
+                        child=drf_serializers.EmailField(),
+                        help_text="Emails of students who already had a certificate for the course.",
+                    ),
+                    "failed": drf_serializers.ListField(
+                        child=inline_serializer(
+                            name="IssueCertificateFailedItem",
+                            fields={
+                                "email": drf_serializers.EmailField(),
+                                "reason": drf_serializers.CharField(),
+                            },
+                        ),
+                        help_text="Students for whom PDF generation failed.",
+                    ),
+                    "message": drf_serializers.CharField(
+                        help_text="Summary string e.g. '3 issued, 1 skipped, 0 failed.'"
+                    ),
+                },
+            ),
+            400: inline_serializer(
+                name="IssueCertificateError",
+                fields={"error": drf_serializers.CharField()},
+            ),
+        },
+        description=(
+            "Issue certificates to selected students using a chosen template.\n\n"
+            "- **issued**: certificates successfully created and emailed.\n"
+            "- **skipped**: students already holding a certificate for that course (no duplicate issued).\n"
+            "- **failed**: students for whom PDF generation failed (certificate record is rolled back).\n\n"
+            "Possible 400 errors:\n"
+            "- `Certificate template not found.`\n"
+            "- `No valid completed enrollments found.`"
+        ),
     )
     @action(detail=False, methods=["post"], url_path="issue")
     def issue(self, request):
@@ -192,7 +230,7 @@ class CertificateViewSet(viewsets.ViewSet):
                 continue
 
             # Send email
-            send_email(
+            email_sent = send_email(
                 to_email=cert.student.email,
                 purpose="certificate_issued",
                 template_data={
@@ -207,6 +245,19 @@ class CertificateViewSet(viewsets.ViewSet):
                     ),
                 },
             )
+            if email_sent:
+                logger.info(
+                    "Certificate email sent to %s for course %s",
+                    cert.student.email,
+                    cert.course.title,
+                )
+            else:
+                logger.error(
+                    "Certificate email FAILED for %s (course: %s, cert: %s)",
+                    cert.student.email,
+                    cert.course.title,
+                    cert.certificate_id,
+                )
 
             issued.append(cert)
 
