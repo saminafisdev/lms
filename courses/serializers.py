@@ -425,11 +425,23 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         source="course",
         write_only=True,
     )
+    student = serializers.SerializerMethodField()
 
     class Meta:
         model = Enrollment
         fields = "__all__"
         read_only_fields = ["user", "enrolled_at"]
+
+    def get_student(self, obj):
+        u = obj.user
+        if not u:
+            return None
+        return {
+            "id": u.id,
+            "email": u.email,
+            "first_name": u.first_name,
+            "last_name": u.last_name,
+        }
 
 
 # ── Quiz Submission ──────────────────────────────────────────────────────────
