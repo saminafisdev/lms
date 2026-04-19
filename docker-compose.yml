@@ -11,6 +11,8 @@ services:
     restart: unless-stopped
     depends_on:
       - celery
+    networks:
+      - dokploy-network
 
   celery:
     build: .
@@ -20,6 +22,8 @@ services:
     env_file:
       - .env
     restart: unless-stopped
+    networks:
+      - dokploy-network
 
   beat:
     build: .
@@ -29,3 +33,9 @@ services:
     env_file:
       - .env
     restart: unless-stopped
+    networks:
+      - dokploy-network
+
+networks:
+  dokploy-network:
+    external: true
