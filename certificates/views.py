@@ -41,9 +41,10 @@ class CertificateTemplateViewSet(viewsets.ModelViewSet):
         GET /certificate-templates/{id}/preview/
         Admin — returns the raw HTML template content for in-browser preview.
         """
+        from .utils import _read_template_html
         template = self.get_object()
         try:
-            html_content = template.html_file.read().decode("utf-8")
+            html_content = _read_template_html(template)
         except Exception:
             return Response(
                 {"error": "Could not read template file."},
