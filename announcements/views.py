@@ -18,11 +18,11 @@ class CourseAnnouncementViewSet(
     serializer_class = CourseAnnouncementSerializer
 
     def get_course(self):
-        return Course.objects.get(slug=self.kwargs["course_slug"])
+        return Course.objects.get(pk=self.kwargs["course_pk"])
 
     def get_queryset(self):
         return CourseAnnouncement.objects.filter(
-            course__slug=self.kwargs["course_slug"]
+            course_id=self.kwargs["course_pk"]
         ).select_related("created_by")
 
     def get_permissions(self):
