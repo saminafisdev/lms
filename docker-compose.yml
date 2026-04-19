@@ -1,9 +1,8 @@
 services:
   web:
     build: .
-    command: sleep infinity
     environment:
-      APP_ROLE: web
+      APP_ROLE: shell
     env_file:
       - .env
     ports:

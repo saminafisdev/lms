@@ -27,8 +27,11 @@ case "$ROLE" in
       --access-logfile - \
       --error-logfile -
     ;;
-  *)
-    echo "Unknown APP_ROLE: $ROLE. Use web, celery, or beat."
+  shell)
+    echo "Shell/debug mode — sleeping..."
+    exec sleep infinity
+    ;;
+  *)    echo "Unknown APP_ROLE: $ROLE. Use web, celery, or beat."
     exit 1
     ;;
 esac
