@@ -6,6 +6,7 @@ from .views import (
     BundleViewSet,
     ConsultationPurchaseViewSet,
     RecurringAvailabilityViewSet,
+    TeacherConsultationViewSet,
 )
 
 router = routers.DefaultRouter()
@@ -17,7 +18,11 @@ consultation_router.register(r"timeslots", AvailableTimeslotViewSet, basename="c
 consultation_router.register(r"bundles", BundleViewSet, basename="consultation-bundles")
 consultation_router.register(r"recurring", RecurringAvailabilityViewSet, basename="consultation-recurring")
 
+teacher_router = routers.DefaultRouter()
+teacher_router.register(r"consultations", TeacherConsultationViewSet, basename="teacher-consultations")
+
 urlpatterns = [
     path("", include(router.urls)),
     path("", include(consultation_router.urls)),
+    path("teacher/", include(teacher_router.urls)),
 ]

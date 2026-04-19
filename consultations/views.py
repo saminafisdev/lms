@@ -6,7 +6,7 @@ from rest_framework import permissions, serializers as drf_serializers, status, 
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from config.permissions import IsAdminRole
+from config.permissions import IsAdminRole, IsTeacherRole
 from orders.stripe import create_payment_intent
 
 from .models import AvailableTimeslot, Bundle, Consultation, ConsultationPurchase, RecurringAvailability
@@ -293,3 +293,26 @@ class ConsultationPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
             "consultation", "bundle_applied"
         ).prefetch_related("booked_slots")
 
+
+
+class TeacherConsultationViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    GET /teacher/consultations/
+    Teacher's upcoming booked consultation slots — so they don't miss a session.
+    Returns date, time, zoom join link (for student) and zoom start link (to host).
+    """
+
+    permission_classes = [IsTeacherRole]
+    serializer_class = AvailableTimeslotSerializer
+
+    def get_queryset(self):
+        from django.utils import timezone
+        today = timezone.now().date()
+        return (
+            AvailableTimeslot.objects.filter(
+                consultation__teacher__user=self.request.user,
+                is_booked=True,
+                day__gte=today,
+            )
+            .order_by("day", "start_time")
+        )
