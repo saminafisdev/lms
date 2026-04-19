@@ -1,3 +1,4 @@
+import logging
 import requests
 from django.conf import settings
 from django.core.files.base import ContentFile
@@ -14,8 +15,11 @@ def _read_template_html(template):
     """
     if getattr(settings, "USE_BUNNY_STORAGE", False):
         url = template.html_file.url
-        response = requests.get(url, timeout=15)
+        logger = logging.getLogger(__name__)
+        logger.warning(f"[CERT] Fetching template from CDN: {url}")
+        response = requests.get(url, timeout=30)
         response.raise_for_status()
+        logger.warning(f"[CERT] Template fetched: status={response.status_code} length={len(response.content)}")
         return response.text
     else:
         with template.html_file.open("rb") as f:
@@ -67,13 +71,17 @@ def generate_certificate_pdf(certificate, template):
     Returns True on success, False on failure.
     """
     from weasyprint import HTML
-    import logging
 
     logger = logging.getLogger(__name__)
 
     try:
         html_content = render_certificate_html(template, certificate)
+        logger.warning(
+            f"[CERT] Rendering PDF: html_length={len(html_content)} "
+            f"cert={certificate.certificate_id}"
+        )
         pdf_bytes = HTML(string=html_content).write_pdf()
+        logger.warning(f"[CERT] PDF generated: size={len(pdf_bytes)} bytes")
         filename = f"certificate_{certificate.certificate_id}.pdf"
         certificate.pdf_file.save(filename, ContentFile(pdf_bytes), save=True)
         return True
