@@ -2,7 +2,7 @@ services:
   web:
     build: .
     environment:
-      APP_ROLE: shell
+      APP_ROLE: web
     env_file:
       - .env
     ports:
