@@ -17,6 +17,7 @@ from .models import StudentProfile, TeacherProfile, NewsletterSubscriber
 from .permissions import IsTeacher
 from .serializers import (
     StudentProfileSerializer,
+    StudentProfileMeSerializer,
     TeacherProfileSerializer,
     NewsletterSubscribeSerializer,
     NewsletterSubscriberSerializer,
@@ -99,7 +100,7 @@ class StudentProfileViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if request.method == "PATCH":
-            serializer = StudentProfileSerializer(profile, data=request.data, partial=True)
+            serializer = StudentProfileMeSerializer(profile, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             old_subscribed = profile.is_subscribed_to_newsletter
             profile = serializer.save()
@@ -110,7 +111,7 @@ class StudentProfileViewSet(viewsets.ModelViewSet):
                 remove_contact(profile.user)
             return Response(serializer.data)
 
-        return Response(StudentProfileSerializer(profile).data)
+        return Response(StudentProfileMeSerializer(profile).data)
 
     @action(
         detail=False,

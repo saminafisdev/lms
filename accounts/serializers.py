@@ -152,6 +152,24 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         return student_profile
 
 
+class StudentProfileMeSerializer(serializers.ModelSerializer):
+    """Used for GET/PATCH /student-profiles/me/ — only profile fields, no password."""
+    first_name = serializers.CharField(source="user.first_name", required=False)
+    last_name = serializers.CharField(source="user.last_name", required=False)
+    email = serializers.EmailField(source="user.email", read_only=True)
+
+    class Meta:
+        model = StudentProfile
+        fields = ["id", "email", "first_name", "last_name", "phone_number", "location", "profile_picture"]
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop("user", {})
+        for attr, value in user_data.items():
+            setattr(instance.user, attr, value)
+        instance.user.save(update_fields=list(user_data.keys()) or None)
+        return super().update(instance, validated_data)
+
+
 class NewsletterSubscribeSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
