@@ -94,7 +94,7 @@ def _strip_zoom_token(url):
     return urlunparse(parsed._replace(query=clean_query))
 
 
-(topic, start_datetime, duration_minutes, agenda="", host_email=None, exclude_lesson_pk=None):
+def create_meeting(topic, start_datetime, duration_minutes, agenda="", host_email=None, exclude_lesson_pk=None):
     """
     Creates a Zoom scheduled meeting.
 
