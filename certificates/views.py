@@ -30,7 +30,7 @@ class CertificateTemplateViewSet(viewsets.ModelViewSet):
     {{instructor_name}}, {{issue_date}}, {{certificate_id}}
     """
 
-    queryset = CertificateTemplate.objects.select_related("course", "created_by").all()
+    queryset = CertificateTemplate.objects.select_related("created_by").all()
     serializer_class = CertificateTemplateSerializer
     permission_classes = [IsAdminRole]
 
