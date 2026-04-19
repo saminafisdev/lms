@@ -20,7 +20,7 @@ class MembershipPlanViewSet(viewsets.GenericViewSet):
     serializer_class = MembershipPlanSerializer
 
     def get_permissions(self):
-        if self.action == "retrieve_plan":
+        if self.action == "plan" and self.request.method == "GET":
             return [AllowAny()]
         if self.action == "subscribe":
             return [IsStudent()]
@@ -29,36 +29,17 @@ class MembershipPlanViewSet(viewsets.GenericViewSet):
         return [IsAdminUser()]
 
     @extend_schema(responses=MembershipPlanSerializer, description="Get current membership plan details (public).")
-    @action(detail=False, methods=["get"], url_path="plan")
-    def retrieve_plan(self, request):
-        plan = MembershipPlan.get()
-        return Response(MembershipPlanSerializer(plan).data)
-
-    @extend_schema(
-        request=MembershipPlanSerializer,
-        responses=MembershipPlanSerializer,
-        description="Create the membership plan (admin only). Safe to call on fresh DB — creates if not exists, otherwise updates.",
-    )
-    @action(detail=False, methods=["post"], url_path="plan")
-    def create_plan(self, request):
-        plan = MembershipPlan.get()  # get_or_create singleton
-        serializer = MembershipPlanSerializer(plan, data=request.data, partial=False)
+    @action(detail=False, methods=["get", "post", "patch"], url_path="plan")
+    def plan(self, request):
+        membership_plan = MembershipPlan.get()
+        if request.method == "GET":
+            return Response(MembershipPlanSerializer(membership_plan).data)
+        partial = request.method == "PATCH"
+        serializer = MembershipPlanSerializer(membership_plan, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    @extend_schema(
-        request=MembershipPlanSerializer,
-        responses=MembershipPlanSerializer,
-        description="Update the membership plan (admin only). All fields optional.",
-    )
-    @action(detail=False, methods=["patch"], url_path="plan/update")
-    def update_plan(self, request):
-        plan = MembershipPlan.get()
-        serializer = MembershipPlanSerializer(plan, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
+        status_code = status.HTTP_201_CREATED if request.method == "POST" else status.HTTP_200_OK
+        return Response(serializer.data, status=status_code)
 
     @extend_schema(
         request=None,
