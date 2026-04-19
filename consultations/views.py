@@ -35,7 +35,7 @@ class ConsultationViewSet(viewsets.ModelViewSet):
         return ConsultationSerializer
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve", "book"):
+        if self.action in ("list", "retrieve", "book", "calendar"):
             return [permissions.IsAuthenticated()]
         if self.action is None:
             # Unrecognised method (e.g. GET on a POST-only action) — let DRF return 405
