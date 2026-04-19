@@ -4,7 +4,7 @@ from rest_framework import serializers
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
-from accounts.serializers import CourseTeacherSerializer
+from accounts.serializers import CourseTeacherSerializer, SimpleStudentSerializer
 from accounts.models import TeacherProfile
 from .models import (
     CourseCategory,
@@ -388,7 +388,7 @@ class BundleSerializer(serializers.ModelSerializer):
 
 class ScholarshipSerializer(serializers.ModelSerializer):
     course_detail = SimpleCourseSerializer(source="course", read_only=True)
-    user_detail = serializers.SerializerMethodField()
+    user_detail = SimpleStudentSerializer(source="user.student_profile", read_only=True)
     reviewed_by_detail = serializers.SerializerMethodField()
     documents = ScholarshipDocumentSerializer(many=True, read_only=True)
 
@@ -405,12 +405,6 @@ class ScholarshipSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
-    def get_user_detail(self, obj):
-        if not obj.user:
-            return None
-        u = obj.user
-        return {"id": u.id, "email": u.email, "first_name": u.first_name, "last_name": u.last_name}
-
     def get_reviewed_by_detail(self, obj):
         if not obj.reviewed_by:
             return None
@@ -425,23 +419,12 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         source="course",
         write_only=True,
     )
-    student = serializers.SerializerMethodField()
+    student = SimpleStudentSerializer(source="user.student_profile", read_only=True)
 
     class Meta:
         model = Enrollment
         fields = "__all__"
         read_only_fields = ["user", "enrolled_at"]
-
-    def get_student(self, obj):
-        u = obj.user
-        if not u:
-            return None
-        return {
-            "id": u.id,
-            "email": u.email,
-            "first_name": u.first_name,
-            "last_name": u.last_name,
-        }
 
 
 # ── Quiz Submission ──────────────────────────────────────────────────────────
@@ -516,7 +499,7 @@ class AssignmentSubmissionReviewSerializer(serializers.ModelSerializer):
 
 
 class AssignmentSubmissionSerializer(serializers.ModelSerializer):
-    user_detail = serializers.SerializerMethodField()
+    user_detail = SimpleStudentSerializer(source="user.student_profile", read_only=True)
     reviewed_by_detail = serializers.SerializerMethodField()
     assignment_title = serializers.CharField(source="assignment.lesson.title", read_only=True)
 
@@ -537,10 +520,6 @@ class AssignmentSubmissionSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-
-    def get_user_detail(self, obj):
-        u = obj.user
-        return {"id": u.id, "email": u.email, "first_name": u.first_name, "last_name": u.last_name}
 
     def get_reviewed_by_detail(self, obj):
         if not obj.reviewed_by:

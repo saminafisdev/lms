@@ -233,13 +233,13 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.is_staff or user.role == "admin":
-            queryset = Enrollment.objects.select_related("user", "course")
+            queryset = Enrollment.objects.select_related("user", "user__student_profile", "course")
             # Admin can filter by user id
             user_id = self.request.query_params.get("user")
             if user_id:
                 queryset = queryset.filter(user__id=user_id)
             return queryset
-        return Enrollment.objects.select_related("user", "course").filter(user=user)
+        return Enrollment.objects.select_related("user", "user__student_profile", "course").filter(user=user)
 
     def get_permissions(self):
         return [permissions.IsAuthenticated()]

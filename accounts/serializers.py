@@ -170,6 +170,19 @@ class StudentProfileMeSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
+class SimpleStudentSerializer(serializers.ModelSerializer):
+    """Read-only student snapshot for nesting inside enrollment/scholarship/submission serializers."""
+    id = serializers.IntegerField(source="user.id")
+    email = serializers.EmailField(source="user.email")
+    first_name = serializers.CharField(source="user.first_name")
+    last_name = serializers.CharField(source="user.last_name")
+
+    class Meta:
+        model = StudentProfile
+        fields = ["id", "email", "first_name", "last_name", "phone_number", "location", "profile_picture"]
+        read_only_fields = fields
+
+
 class NewsletterSubscribeSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
