@@ -7,7 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from config.permissions import IsAdminRole, IsTeacherRole
-from orders.stripe import create_payment_intent
+from orders.stripe import create_checkout_session
 
 from .models import AvailableTimeslot, Bundle, Consultation, ConsultationPurchase, RecurringAvailability
 from .serializers import (
@@ -108,9 +108,20 @@ class ConsultationViewSet(viewsets.ModelViewSet):
             )
             purchase.booked_slots.set(timeslots)
 
-        # Create Stripe PaymentIntent outside the transaction lock
-        intent = create_payment_intent(
-            amount=total_price,
+        # Create Stripe Checkout Session outside the transaction lock
+        session = create_checkout_session(
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": settings.CURRENCY,
+                        "unit_amount": int(total_price * 100),
+                        "product_data": {"name": consultation.title},
+                    },
+                    "quantity": 1,
+                }
+            ],
+            success_url=f"{settings.FRONTEND_URL}/consultation-complete?purchase_id={purchase.id}",
+            cancel_url=f"{settings.FRONTEND_URL}/consultations?cancelled=true",
             metadata={
                 "purchase_type": "consultation",
                 "consultation_purchase_id": purchase.id,
@@ -118,14 +129,13 @@ class ConsultationViewSet(viewsets.ModelViewSet):
             },
         )
 
-        purchase.payment_reference = intent["id"]
+        purchase.payment_reference = session["id"]
         purchase.save(update_fields=["payment_reference"])
 
         return Response(
             {
-                "purchase": ConsultationPurchaseSerializer(purchase, context={"request": request}).data,
-                "client_secret": intent["client_secret"],
-                "publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+                "purchase_id": purchase.id,
+                "checkout_url": session["url"],
             },
             status=status.HTTP_201_CREATED,
         )

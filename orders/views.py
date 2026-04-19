@@ -419,6 +419,10 @@ class StripeWebhookView(APIView):
                 )
             return
 
+        if purchase_type == "consultation":
+            self._fulfill_consultation(metadata)
+            return
+
         order_id = metadata.get("order_id")
         if not order_id:
             return
@@ -454,6 +458,13 @@ class StripeWebhookView(APIView):
                 Donation.objects.filter(id=donation_id, status=Donation.Status.PENDING).update(
                     status=Donation.Status.FAILED
                 )
+            return
+
+        if purchase_type == "consultation":
+            purchase_id = metadata.get("consultation_purchase_id")
+            if purchase_id:
+                from consultations.models import ConsultationPurchase
+                ConsultationPurchase.objects.filter(id=purchase_id, status="pending").update(status="failed")
             return
 
         order_id = metadata.get("order_id")
