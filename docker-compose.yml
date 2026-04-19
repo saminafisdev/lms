@@ -1,7 +1,7 @@
 services:
   web:
     build: .
-    command: web
+    command: sleep infinity
     environment:
       APP_ROLE: web
     env_file:
