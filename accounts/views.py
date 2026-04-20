@@ -346,7 +346,7 @@ class AdminDashboardView(APIView):
         total_teachers = User.objects.filter(role="teacher").count()
         active_courses = Course.objects.filter(is_active=True).count()
         total_revenue = (
-            Order.objects.filter(status=Order.OrderStatus.COMPLETED)
+            Order.objects.filter(status=Order.PaymentStatus.COMPLETED)
             .aggregate(total=Sum("total_amount"))["total"]
             or 0
         )
@@ -355,7 +355,7 @@ class AdminDashboardView(APIView):
         top_course_items = (
             OrderItem.objects.filter(
                 item_type="course",
-                order__status=Order.OrderStatus.COMPLETED,
+                order__status=Order.PaymentStatus.COMPLETED,
             )
             .values("course")
             .annotate(revenue=Sum("total_price"), student_count=Count("order__user", distinct=True))
