@@ -73,7 +73,8 @@ class Blog(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(self.title)
+            from config.utils import generate_unique_slug
+            self.slug = generate_unique_slug(Blog, self.title, instance_pk=self.pk)
         if self.status == self.STATUS_PUBLISHED and not self.published_at:
             self.published_at = timezone.now()
         super().save(*args, **kwargs)
