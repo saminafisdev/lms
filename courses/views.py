@@ -56,6 +56,13 @@ from .serializers import (
 )
 
 
+def user_has_course_access(user, course):
+    """Return True if the user can access course content — either enrolled or has active membership."""
+    if Enrollment.objects.filter(user=user, course=course).exists():
+        return True
+    return hasattr(user, "membership") and user.membership.is_currently_active
+
+
 class CourseFilter(django_filters.FilterSet):
     teacher = django_filters.ModelChoiceFilter(
         queryset=TeacherProfile.objects.select_related("user").all()
@@ -817,12 +824,8 @@ class LessonViewSet(viewsets.ModelViewSet):
         """
         lesson = self.get_object()
 
-        # Must be enrolled
-        enrollment = Enrollment.objects.filter(
-            user=request.user, course=lesson.module.course
-        ).first()
-
-        if not enrollment:
+        # Must be enrolled or have active membership
+        if not user_has_course_access(request.user, lesson.module.course):
             return Response(
                 {"error": "You are not enrolled in this course."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -884,11 +887,8 @@ class QuizViewSet(viewsets.ModelViewSet):
         """
         quiz = self.get_object()
 
-        # Verify enrollment
-        enrollment = Enrollment.objects.filter(
-            user=request.user, course=quiz.lesson.module.course
-        ).first()
-        if not enrollment:
+        # Verify enrollment or active membership
+        if not user_has_course_access(request.user, quiz.lesson.module.course):
             return Response(
                 {"error": "You are not enrolled in this course."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -1021,10 +1021,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         """
         assignment = self.get_object()
 
-        enrollment = Enrollment.objects.filter(
-            user=request.user, course=assignment.lesson.module.course
-        ).first()
-        if not enrollment:
+        if not user_has_course_access(request.user, assignment.lesson.module.course):
             return Response(
                 {"error": "You are not enrolled in this course."},
                 status=status.HTTP_403_FORBIDDEN,
