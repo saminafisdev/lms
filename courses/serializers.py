@@ -122,6 +122,7 @@ class LessonSerializer(serializers.ModelSerializer):
             "module": {"read_only": True},
             "bunny_video_id": {"read_only": True},
             "bunny_video_status": {"read_only": True},
+            "video_content": {"read_only": True},
             "zoom_meeting_id": {"read_only": True},
             "zoom_host_email": {"read_only": True},
             "zoom_join_url": {"read_only": True},
