@@ -243,7 +243,7 @@ class OrderViewSet(viewsets.ViewSet):
                 "price_data": {
                     "currency": settings.CURRENCY,
                     "unit_amount": int(price * 100),
-                    "product_data": {"name": obj.title},
+                    "product_data": {"name": obj.name if item_type == "bundle" else obj.title},
                 },
                 "quantity": 1,
             }],
