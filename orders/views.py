@@ -227,6 +227,16 @@ class OrderViewSet(viewsets.ViewSet):
             total_price=price,
         )
 
+        # Free item (100% scholarship or free course/book) — skip Stripe entirely
+        if price == 0:
+            order.status = Order.PaymentStatus.COMPLETED
+            order.save(update_fields=["status"])
+            self._fulfill_order(order)
+            return Response(
+                {"order": OrderSerializer(order).data},
+                status=status.HTTP_201_CREATED,
+            )
+
         # Create Stripe Checkout Session
         session = create_checkout_session(
             line_items=[{
