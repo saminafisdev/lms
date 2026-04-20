@@ -203,6 +203,7 @@ CELERY_TIMEZONE = "UTC"
 # Third-party credentials (optional in base — required overrides in prod)
 # ---------------------------------------------------------------------------
 SENDGRID_API_KEY = env("SENDGRID_API_KEY", default="")
+SENDGRID_NEWSLETTER_LIST_ID = env("SENDGRID_NEWSLETTER_LIST_ID", default="")
 STRIPE_PUBLISHABLE_KEY = env("STRIPE_PUBLISHABLE_KEY", default="")
 STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY", default="")
 STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default="")

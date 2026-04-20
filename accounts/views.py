@@ -12,6 +12,7 @@ from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 
 from config.sendgrid_contacts import add_contact, remove_contact
 from config.permissions import IsAdminRole
+from config.tasks import sync_newsletter_contact_task
 
 from .models import StudentProfile, TeacherProfile, NewsletterSubscriber
 from .permissions import IsTeacher
@@ -129,6 +130,11 @@ class StudentProfileViewSet(viewsets.ModelViewSet):
         profile.is_subscribed_to_newsletter = True
         profile.save(update_fields=["is_subscribed_to_newsletter"])
         add_contact(request.user)
+        sync_newsletter_contact_task.delay(
+            request.user.email, "subscribe",
+            first_name=request.user.first_name or "",
+            last_name=request.user.last_name or "",
+        )
         return Response({"detail": "Subscribed to newsletter."})
 
     @action(
@@ -147,6 +153,7 @@ class StudentProfileViewSet(viewsets.ModelViewSet):
         profile.is_subscribed_to_newsletter = False
         profile.save(update_fields=["is_subscribed_to_newsletter"])
         remove_contact(request.user)
+        sync_newsletter_contact_task.delay(request.user.email, "unsubscribe")
         return Response({"detail": "Unsubscribed from newsletter."})
 
 
@@ -269,6 +276,7 @@ class NewsletterSubscribeView(APIView):
             return Response({"detail": "Already subscribed."})
         subscriber.is_active = True
         subscriber.save(update_fields=["is_active"])
+        sync_newsletter_contact_task.delay(email, "subscribe")
         return Response({"detail": "Successfully subscribed to newsletter."})
 
 
@@ -284,6 +292,7 @@ class NewsletterUnsubscribeView(APIView):
         updated = NewsletterSubscriber.objects.filter(email=email).update(is_active=False)
         if not updated:
             return Response({"detail": "Email not found."}, status=status.HTTP_404_NOT_FOUND)
+        sync_newsletter_contact_task.delay(email, "unsubscribe")
         return Response({"detail": "Successfully unsubscribed."})
 
 

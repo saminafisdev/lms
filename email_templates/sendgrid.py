@@ -50,6 +50,64 @@ def fetch_sendgrid_templates():
         return []
 
 
+def add_contact_to_newsletter(email, first_name="", last_name=""):
+    """
+    Add or update a contact in SendGrid Marketing Contacts and place them
+    on the newsletter list (SENDGRID_NEWSLETTER_LIST_ID).
+    No-op if the list ID is not configured.
+    """
+    list_id = getattr(settings, "SENDGRID_NEWSLETTER_LIST_ID", "")
+    if not list_id:
+        logger.warning("SENDGRID_NEWSLETTER_LIST_ID not set — skipping contact sync.")
+        return False
+
+    sg = get_sendgrid_client()
+    body = {
+        "contacts": [{"email": email, "first_name": first_name, "last_name": last_name}],
+        "list_ids": [list_id],
+    }
+    try:
+        response = sg.client.marketing.contacts.put(request_body=body)
+        logger.info(f"SendGrid: added {email} to newsletter list. Status: {response.status_code}")
+        return True
+    except Exception as e:
+        logger.error(f"SendGrid: failed to add {email} to newsletter list: {e}")
+        return False
+
+
+def remove_contact_from_newsletter(email):
+    """
+    Remove a contact from the newsletter list in SendGrid.
+    Searches for the contact by email then removes them from the list.
+    Does NOT add to global unsubscribes (that would block transactional emails too).
+    """
+    list_id = getattr(settings, "SENDGRID_NEWSLETTER_LIST_ID", "")
+    if not list_id:
+        logger.warning("SENDGRID_NEWSLETTER_LIST_ID not set — skipping contact sync.")
+        return False
+
+    sg = get_sendgrid_client()
+    try:
+        search_response = sg.client.marketing.contacts.search.emails.post(
+            request_body={"emails": [email]}
+        )
+        data = json.loads(search_response.body)
+        contact = data.get("result", {}).get(email, {})
+        contact_id = contact.get("contact", {}).get("id")
+        if not contact_id:
+            logger.info(f"SendGrid: {email} not found in contacts, nothing to remove.")
+            return True
+
+        sg.client.marketing.lists._(list_id).contacts.delete(
+            query_params={"contact_ids": contact_id}
+        )
+        logger.info(f"SendGrid: removed {email} from newsletter list.")
+        return True
+    except Exception as e:
+        logger.error(f"SendGrid: failed to remove {email} from newsletter list: {e}")
+        return False
+
+
 def send_plain_email(to_email, subject, body):
     """
     Send a basic plain-text email via SendGrid without a dynamic template.

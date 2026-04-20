@@ -55,3 +55,21 @@ def delete_bunny_video_task(self, video_id):
     except Exception as exc:
         logger.error(f"Failed to delete Bunny video {video_id}: {exc}")
         raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=30)
+def sync_newsletter_contact_task(self, email, action, first_name="", last_name=""):
+    """
+    Sync a newsletter subscriber with SendGrid Marketing Contacts.
+    action: 'subscribe' or 'unsubscribe'
+    """
+    try:
+        from email_templates.sendgrid import add_contact_to_newsletter, remove_contact_from_newsletter
+        if action == "subscribe":
+            add_contact_to_newsletter(email, first_name=first_name, last_name=last_name)
+        elif action == "unsubscribe":
+            remove_contact_from_newsletter(email)
+    except Exception as exc:
+        logger.error(f"Newsletter sync failed for {email} ({action}): {exc}")
+        raise self.retry(exc=exc)
+
