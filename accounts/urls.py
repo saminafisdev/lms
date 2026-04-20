@@ -5,6 +5,7 @@ from .views import (
     StudentProfileViewSet,
     StudentDashboardView,
     AdminDashboardView,
+    TeacherEarningsView,
     NewsletterSubscribeView,
     NewsletterUnsubscribeView,
     NewsletterSubscriberViewSet,
@@ -19,6 +20,7 @@ urlpatterns = [
     path("", include(router.urls)),
     path("student/dashboard/", StudentDashboardView.as_view(), name="student-dashboard"),
     path("dashboard/admin/", AdminDashboardView.as_view(), name="admin-dashboard"),
+    path("dashboard/teacher-earnings/", TeacherEarningsView.as_view(), name="teacher-earnings"),
     path("newsletter/subscribe/", NewsletterSubscribeView.as_view(), name="newsletter-subscribe"),
     path("newsletter/unsubscribe/", NewsletterUnsubscribeView.as_view(), name="newsletter-unsubscribe"),
 ]

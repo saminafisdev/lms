@@ -420,3 +420,67 @@ class AdminDashboardView(APIView):
             "top_courses": top_courses_data,
             "todays_classes": todays_classes_data,
         })
+
+
+class TeacherEarningsView(APIView):
+    """GET /dashboard/teacher-earnings/ — per-teacher revenue breakdown (admin only)."""
+    permission_classes = [IsAdminRole]
+
+    def get(self, request):
+        from django.db.models import Sum, Count
+        from orders.models import Order, OrderItem
+        from consultations.models import ConsultationPurchase
+
+        teachers = TeacherProfile.objects.select_related("user").all()
+        results = []
+
+        for teacher in teachers:
+            # Course revenue from completed orders
+            course_revenue = (
+                OrderItem.objects.filter(
+                    item_type="course",
+                    course__teacher=teacher,
+                    order__status=Order.PaymentStatus.COMPLETED,
+                ).aggregate(total=Sum("total_price"))["total"]
+                or 0
+            )
+
+            # Consultation revenue from completed purchases
+            consultation_revenue = (
+                ConsultationPurchase.objects.filter(
+                    consultation__teacher=teacher,
+                    status="completed",
+                ).aggregate(total=Sum("total_price_paid"))["total"]
+                or 0
+            )
+
+            # Distinct enrolled students across all courses
+            student_count = (
+                OrderItem.objects.filter(
+                    item_type="course",
+                    course__teacher=teacher,
+                    order__status=Order.PaymentStatus.COMPLETED,
+                ).aggregate(count=Count("order__user", distinct=True))["count"]
+                or 0
+            )
+
+            # Completed consultation sessions
+            session_count = ConsultationPurchase.objects.filter(
+                consultation__teacher=teacher,
+                status="completed",
+            ).count()
+
+            results.append({
+                "teacher_id": teacher.id,
+                "name": teacher.user.get_full_name() or teacher.user.email,
+                "email": teacher.user.email,
+                "course_revenue": course_revenue,
+                "consultation_revenue": consultation_revenue,
+                "total_earnings": course_revenue + consultation_revenue,
+                "student_count": student_count,
+                "session_count": session_count,
+            })
+
+        # Sort by total earnings descending
+        results.sort(key=lambda x: x["total_earnings"], reverse=True)
+        return Response(results)
