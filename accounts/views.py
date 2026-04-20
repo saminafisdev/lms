@@ -273,6 +273,8 @@ class NewsletterSubscribeView(APIView):
         email = serializer.validated_data["email"]
         subscriber, created = NewsletterSubscriber.objects.get_or_create(email=email)
         if not created and subscriber.is_active:
+            # Already subscribed in DB — re-sync to SendGrid in case it was missed
+            sync_newsletter_contact_task.delay(email, "subscribe")
             return Response({"detail": "Already subscribed."})
         subscriber.is_active = True
         subscriber.save(update_fields=["is_active"])
