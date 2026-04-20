@@ -269,7 +269,7 @@ class ModuleSerializer(serializers.ModelSerializer):
         model = Module
         fields = "__all__"
         extra_kwargs = {
-            "course": {"required": False},
+            "course": {"read_only": True},
             "order": {"read_only": True},
         }
 
