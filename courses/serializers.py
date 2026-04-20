@@ -117,7 +117,10 @@ class LessonSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lesson
         fields = "__all__"
-        extra_kwargs = {"order": {"read_only": True}}
+        extra_kwargs = {
+            "order": {"read_only": True},
+            "module": {"read_only": True},
+        }
 
     def get_live_status(self, obj):
         """
