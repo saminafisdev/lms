@@ -836,15 +836,18 @@ class LessonViewSet(viewsets.ModelViewSet):
             user=request.user, lesson=lesson
         )
 
-        # Check if course is now complete
-        course_completed = enrollment.check_completion()
+        # Check if course is now complete (only possible for enrolled users, not membership-only)
+        enrollment = Enrollment.objects.filter(
+            user=request.user, course=lesson.module.course
+        ).first()
+        course_completed = enrollment.check_completion() if enrollment else False
 
         return Response(
             {
                 "lesson_completed": True,
                 "already_completed": not created,
                 "course_completed": course_completed,
-                "progress_percent": enrollment.progress_percent,
+                "progress_percent": enrollment.progress_percent if enrollment else None,
             }
         )
 
@@ -928,7 +931,11 @@ class QuizViewSet(viewsets.ModelViewSet):
         # Auto-mark lesson complete and check course completion on pass
         if passed:
             LessonCompletion.objects.get_or_create(user=request.user, lesson=quiz.lesson)
-            enrollment.check_completion()
+            enrollment = Enrollment.objects.filter(
+                user=request.user, course=quiz.lesson.module.course
+            ).first()
+            if enrollment:
+                enrollment.check_completion()
 
         result = QuizAttemptResultSerializer(attempt).data
         return Response(result, status=status.HTTP_201_CREATED)
