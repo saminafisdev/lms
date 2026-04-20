@@ -4,6 +4,7 @@ from .views import (
     TeacherProfileViewSet,
     StudentProfileViewSet,
     StudentDashboardView,
+    AdminDashboardView,
     NewsletterSubscribeView,
     NewsletterUnsubscribeView,
     NewsletterSubscriberViewSet,
@@ -17,6 +18,7 @@ router.register(r"newsletter/subscribers", NewsletterSubscriberViewSet, basename
 urlpatterns = [
     path("", include(router.urls)),
     path("student/dashboard/", StudentDashboardView.as_view(), name="student-dashboard"),
+    path("admin/dashboard/", AdminDashboardView.as_view(), name="admin-dashboard"),
     path("newsletter/subscribe/", NewsletterSubscribeView.as_view(), name="newsletter-subscribe"),
     path("newsletter/unsubscribe/", NewsletterUnsubscribeView.as_view(), name="newsletter-unsubscribe"),
 ]

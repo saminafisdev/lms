@@ -327,3 +327,96 @@ class NewsletterSubscriberViewSet(viewsets.ViewSet):
             return Response({"error": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         subscriber.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AdminDashboardView(APIView):
+    """GET /admin/dashboard/ — summary stats for the admin."""
+    permission_classes = [IsAdminRole]
+
+    def get(self, request):
+        from django.db.models import Sum, Count
+        from django.utils import timezone
+        from orders.models import Order, OrderItem
+        from courses.models import Course, Enrollment, Lesson
+
+        User = request.user.__class__
+
+        # --- Stats ---
+        total_students = User.objects.filter(role="student").count()
+        total_teachers = User.objects.filter(role="teacher").count()
+        active_courses = Course.objects.filter(is_active=True).count()
+        total_revenue = (
+            Order.objects.filter(status=Order.OrderStatus.COMPLETED)
+            .aggregate(total=Sum("total_amount"))["total"]
+            or 0
+        )
+
+        # --- Top 5 courses by revenue ---
+        top_course_items = (
+            OrderItem.objects.filter(
+                item_type="course",
+                order__status=Order.OrderStatus.COMPLETED,
+            )
+            .values("course")
+            .annotate(revenue=Sum("total_price"), student_count=Count("order__user", distinct=True))
+            .order_by("-revenue")[:5]
+        )
+        course_ids = [row["course"] for row in top_course_items]
+        courses_map = {
+            c.id: c
+            for c in Course.objects.filter(id__in=course_ids).select_related("teacher__user")
+        }
+        top_courses_data = []
+        for row in top_course_items:
+            course = courses_map.get(row["course"])
+            if not course:
+                continue
+            teacher = course.teacher
+            instructor_name = (
+                teacher.user.get_full_name() or teacher.user.email
+                if teacher and teacher.user
+                else "—"
+            )
+            top_courses_data.append({
+                "id": course.id,
+                "title": course.title,
+                "instructor": instructor_name,
+                "student_count": row["student_count"],
+                "revenue": row["revenue"],
+            })
+
+        # --- Today's scheduled live classes ---
+        today = timezone.localdate()
+        todays_classes = (
+            Lesson.objects.filter(content_type="live", scheduled_at__date=today)
+            .select_related("module__course__teacher__user")
+            .order_by("scheduled_at")
+        )
+        todays_classes_data = []
+        for lesson in todays_classes:
+            course = lesson.module.course
+            teacher = course.teacher
+            instructor_name = (
+                teacher.user.get_full_name() or teacher.user.email
+                if teacher and teacher.user
+                else "—"
+            )
+            todays_classes_data.append({
+                "lesson_id": lesson.id,
+                "title": lesson.title,
+                "course_title": course.title,
+                "instructor": instructor_name,
+                "scheduled_at": lesson.scheduled_at,
+                "zoom_join_url": lesson.zoom_join_url,
+            })
+
+        return Response({
+            "stats": {
+                "total_students": total_students,
+                "total_teachers": total_teachers,
+                "active_courses": active_courses,
+                "total_revenue": total_revenue,
+            },
+            "top_courses": top_courses_data,
+            "todays_classes": todays_classes_data,
+        })
