@@ -126,6 +126,9 @@ class LessonSerializer(serializers.ModelSerializer):
             "zoom_meeting_id": {"read_only": True},
             "zoom_host_email": {"read_only": True},
             "zoom_join_url": {"read_only": True},
+            # zoom_start_url is intentionally excluded here — it is declared above
+            # as a SerializerMethodField to control visibility (admin/teacher only).
+            # The SerializerMethodField shadows the model field from __all__.
         }
 
     def get_live_status(self, obj):
