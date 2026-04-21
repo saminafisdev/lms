@@ -1086,11 +1086,17 @@ class AssignmentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
 
     serializer_class = AssignmentSubmissionSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["assignment", "status", "user"]
+    filterset_fields = {
+        "assignment": ["exact"],
+        "status": ["exact"],
+        "user": ["exact"],
+        "assignment__lesson__module__course": ["exact"],
+        "assignment__lesson__module": ["exact"],
+    }
 
     def get_queryset(self):
         return AssignmentSubmission.objects.select_related(
-            "user", "assignment__lesson", "reviewed_by"
+            "user", "assignment__lesson__module__course", "reviewed_by"
         ).all()
 
     def get_permissions(self):
