@@ -1,10 +1,13 @@
 from django.conf import settings
 from django.db import transaction
+import logging
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import permissions, serializers as drf_serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+
+logger = logging.getLogger(__name__)
 
 from config.permissions import IsAdminRole, IsTeacherRole
 from orders.stripe import create_checkout_session
@@ -35,10 +38,11 @@ class ConsultationViewSet(viewsets.ModelViewSet):
         return ConsultationSerializer
 
     def get_permissions(self):
-        if self.action in ("list", "retrieve", "book", "calendar"):
+        if self.action in ("list", "retrieve", "calendar"):
+            return [permissions.AllowAny()]
+        if self.action == "book":
             return [permissions.IsAuthenticated()]
         if self.action is None:
-            # Unrecognised method (e.g. GET on a POST-only action) — let DRF return 405
             return [permissions.IsAuthenticated()]
         return [IsAdminRole()]
 
@@ -151,7 +155,7 @@ class ConsultationViewSet(viewsets.ModelViewSet):
             )
         ]
     )
-    @action(detail=True, methods=["get"], url_path="calendar", permission_classes=[permissions.IsAuthenticated])
+    @action(detail=True, methods=["get"], url_path="calendar", permission_classes=[permissions.AllowAny])
     def calendar(self, request, pk=None):
         """
         GET /consultations/{id}/calendar/?month=2026-04
@@ -246,7 +250,7 @@ class AvailableTimeslotViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
-            return [permissions.IsAuthenticated()]
+            return [permissions.AllowAny()]
         return [IsAdminRole()]
 
     def get_serializer_class(self):
@@ -293,6 +297,8 @@ class ConsultationPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ConsultationPurchaseSerializer
 
     def get_permissions(self):
+        if self.action == "reschedule":
+            return [IsAdminRole()]
         if getattr(self.request.user, "role", None) == "admin":
             return [IsAdminRole()]
         return [permissions.IsAuthenticated()]
@@ -306,6 +312,79 @@ class ConsultationPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
         return ConsultationPurchase.objects.filter(student=user).select_related(
             "consultation", "bundle_applied"
         ).prefetch_related("booked_slots")
+
+    @action(detail=True, methods=["post"], url_path="reschedule")
+    def reschedule(self, request, pk=None):
+        """
+        POST /consultation-purchases/{id}/reschedule/
+        Admin only. Move one booked slot to a new available slot.
+        Body: { "old_slot_id": <int>, "new_slot_id": <int> }
+        """
+        purchase = self.get_object()
+
+        old_slot_id = request.data.get("old_slot_id")
+        new_slot_id = request.data.get("new_slot_id")
+
+        if not old_slot_id or not new_slot_id:
+            return Response(
+                {"error": "Both old_slot_id and new_slot_id are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            old_slot = purchase.booked_slots.get(id=old_slot_id)
+        except AvailableTimeslot.DoesNotExist:
+            return Response(
+                {"error": "old_slot_id is not part of this purchase."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            new_slot = AvailableTimeslot.objects.get(
+                id=new_slot_id,
+                consultation=purchase.consultation,
+                is_booked=False,
+            )
+        except AvailableTimeslot.DoesNotExist:
+            return Response(
+                {"error": "new_slot_id is unavailable or does not belong to the same consultation."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Cancel old Zoom meeting if one exists
+        if old_slot.zoom_meeting_id:
+            try:
+                from config.zoom import delete_meeting
+                delete_meeting(old_slot.zoom_meeting_id)
+            except Exception as e:
+                logger.warning(f"Failed to delete Zoom meeting {old_slot.zoom_meeting_id}: {e}")
+
+        # Unbook old slot
+        old_slot.is_booked = False
+        old_slot.zoom_meeting_id = None
+        old_slot.zoom_join_url = None
+        old_slot.zoom_start_url = None
+        old_slot.save(update_fields=["is_booked", "zoom_meeting_id", "zoom_join_url", "zoom_start_url"])
+
+        # Book new slot
+        new_slot.is_booked = True
+        new_slot.save(update_fields=["is_booked"])
+
+        # Swap in the purchase
+        purchase.booked_slots.remove(old_slot)
+        purchase.booked_slots.add(new_slot)
+
+        # Create new Zoom meeting async
+        from config.tasks import create_zoom_meeting_for_slot_task
+        student_name = purchase.student.get_full_name() or purchase.student.email
+        create_zoom_meeting_for_slot_task.delay(
+            new_slot.id,
+            purchase.consultation.title,
+            student_name,
+        )
+
+        serializer = self.get_serializer(purchase)
+        return Response(serializer.data)
 
 
 
