@@ -171,16 +171,25 @@ class LessonSerializer(serializers.ModelSerializer):
         if not obj.bunny_video_id:
             return None
         library_id = settings.BUNNY_STREAM_LIBRARY_ID
-        return f"https://iframe.mediadelivery.net/embed/{library_id}/{obj.bunny_video_id}"
+        return (
+            f"https://iframe.mediadelivery.net/embed/{library_id}/{obj.bunny_video_id}"
+        )
 
     def _is_enrolled(self, obj, user):
         """Check enrollment via pre-fetched context or DB fallback."""
         enrolled_course_ids = self.context.get("enrolled_course_ids")
         has_active_membership = self.context.get("has_active_membership", False)
         if enrolled_course_ids is not None:
-            return has_active_membership or (obj.module.course_id in enrolled_course_ids)
-        has_membership = hasattr(user, "membership") and user.membership.is_currently_active
-        return has_membership or Enrollment.objects.filter(user=user, course=obj.module.course).exists()
+            return has_active_membership or (
+                obj.module.course_id in enrolled_course_ids
+            )
+        has_membership = (
+            hasattr(user, "membership") and user.membership.is_currently_active
+        )
+        return (
+            has_membership
+            or Enrollment.objects.filter(user=user, course=obj.module.course).exists()
+        )
 
     def get_is_accessible(self, obj):
         request = self.context.get("request")
@@ -224,6 +233,7 @@ class LessonSerializer(serializers.ModelSerializer):
 
 class LiveLessonSerializer(serializers.ModelSerializer):
     """Used in teacher live-sessions list and dashboard upcoming sessions."""
+
     course_id = serializers.IntegerField(source="module.course.id", read_only=True)
     course_title = serializers.CharField(source="module.course.title", read_only=True)
     module_title = serializers.CharField(source="module.title", read_only=True)
@@ -288,6 +298,7 @@ class ModuleSerializer(serializers.ModelSerializer):
 
 class CourseListSerializer(SlugMixin, serializers.ModelSerializer):
     """Lightweight serializer for course list views — no nested modules/lessons."""
+
     category = CourseCategorySerializer(read_only=True)
     teacher = CourseTeacherSerializer(read_only=True)
     total_lessons = serializers.SerializerMethodField()
@@ -297,14 +308,26 @@ class CourseListSerializer(SlugMixin, serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = [
-            "id", "title", "slug", "thumbnail", "price", "level", "status",
-            "is_active", "category", "teacher",
-            "total_lessons", "duration_in_weeks", "total_hours", "hours_per_session",
-            "is_enrolled", "has_access",
+            "id",
+            "title",
+            "slug",
+            "thumbnail",
+            "price",
+            "level",
+            "status",
+            "is_active",
+            "category",
+            "teacher",
+            "total_lessons",
+            "duration_in_weeks",
+            "total_hours",
+            "hours_per_session",
+            "is_enrolled",
+            "has_access",
         ]
 
     def get_total_lessons(self, obj):
-        if hasattr(obj, 'total_lessons_count'):
+        if hasattr(obj, "total_lessons_count"):
             return obj.total_lessons_count
         return LessonModel.objects.filter(module__course=obj).count()
 
@@ -357,7 +380,7 @@ class CourseSerializer(SlugMixin, serializers.ModelSerializer):
         fields = "__all__"
 
     def get_total_lessons(self, obj):
-        if hasattr(obj, 'total_lessons_count'):
+        if hasattr(obj, "total_lessons_count"):
             return obj.total_lessons_count
         return LessonModel.objects.filter(module__course=obj).count()
 
@@ -371,7 +394,10 @@ class CourseSerializer(SlugMixin, serializers.ModelSerializer):
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return False
-        has_membership = hasattr(request.user, "membership") and request.user.membership.is_currently_active
+        has_membership = (
+            hasattr(request.user, "membership")
+            and request.user.membership.is_currently_active
+        )
         if has_membership:
             return True
         return Enrollment.objects.filter(user=request.user, course=obj).exists()
@@ -401,11 +427,21 @@ class SimpleCourseSerializer(serializers.ModelSerializer):
 
 class BundleCourseSerializer(serializers.ModelSerializer):
     """Minimal course serializer used inside Bundle responses."""
+
     category = CourseCategorySerializer(read_only=True)
 
     class Meta:
         model = Course
-        fields = ["id", "title", "slug", "thumbnail", "price", "level", "status", "category"]
+        fields = [
+            "id",
+            "title",
+            "slug",
+            "thumbnail",
+            "price",
+            "level",
+            "status",
+            "category",
+        ]
 
 
 class BundleSerializer(serializers.ModelSerializer):
@@ -462,7 +498,12 @@ class ScholarshipSerializer(serializers.ModelSerializer):
         if not obj.reviewed_by:
             return None
         u = obj.reviewed_by
-        return {"id": u.id, "email": u.email, "first_name": u.first_name, "last_name": u.last_name}
+        return {
+            "id": u.id,
+            "email": u.email,
+            "first_name": u.first_name,
+            "last_name": u.last_name,
+        }
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):
@@ -481,6 +522,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
 
 # ── Quiz Submission ──────────────────────────────────────────────────────────
+
 
 class QuizAnswerSubmitSerializer(serializers.Serializer):
     question = serializers.PrimaryKeyRelatedField(queryset=Question.objects.all())
@@ -509,7 +551,14 @@ class QuizAttemptResultSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = QuizAttempt
-        fields = ["id", "score", "passed", "passing_score", "total_questions", "created_at"]
+        fields = [
+            "id",
+            "score",
+            "passed",
+            "passing_score",
+            "total_questions",
+            "created_at",
+        ]
 
     def get_passing_score(self, obj):
         return obj.quiz.passing_score
@@ -525,6 +574,7 @@ class QuizAttemptListSerializer(serializers.ModelSerializer):
 
 
 # ── Assignment Submission ────────────────────────────────────────────────────
+
 
 class AssignmentSubmissionCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -545,16 +595,23 @@ class AssignmentSubmissionReviewSerializer(serializers.ModelSerializer):
         fields = ["status", "teacher_feedback", "mark"]
 
     def validate_status(self, value):
-        allowed = [AssignmentSubmission.Status.APPROVED, AssignmentSubmission.Status.REJECTED]
+        allowed = [
+            AssignmentSubmission.Status.APPROVED,
+            AssignmentSubmission.Status.REJECTED,
+        ]
         if value not in allowed:
-            raise serializers.ValidationError("Status must be 'approved' or 'rejected'.")
+            raise serializers.ValidationError(
+                "Status must be 'approved' or 'rejected'."
+            )
         return value
 
 
 class AssignmentSubmissionSerializer(serializers.ModelSerializer):
     user_detail = SimpleStudentSerializer(source="user.student_profile", read_only=True)
     reviewed_by_detail = serializers.SerializerMethodField()
-    assignment_title = serializers.CharField(source="assignment.lesson.title", read_only=True)
+    assignment_title = serializers.CharField(
+        source="assignment.lesson.title", read_only=True
+    )
 
     class Meta:
         model = AssignmentSubmission
@@ -578,4 +635,9 @@ class AssignmentSubmissionSerializer(serializers.ModelSerializer):
         if not obj.reviewed_by:
             return None
         u = obj.reviewed_by
-        return {"id": u.id, "email": u.email, "first_name": u.first_name, "last_name": u.last_name}
+        return {
+            "id": u.id,
+            "email": u.email,
+            "first_name": u.first_name,
+            "last_name": u.last_name,
+        }
