@@ -51,7 +51,6 @@ class Course(models.Model):
     )
     thumbnail = ResizedImageField(
         size=[800, 600],
-        crop=["middle", "center"],
         quality=100,
         upload_to="courses/thumbnails/",
         force_format="WEBP",
@@ -119,7 +118,9 @@ class Enrollment(models.Model):
 
     @property
     def progress_percent(self):
-        total = Lesson.objects.filter(module__course=self.course, is_released=True).count()
+        total = Lesson.objects.filter(
+            module__course=self.course, is_released=True
+        ).count()
         if total == 0:
             return 0
         completed = LessonCompletion.objects.filter(
@@ -131,7 +132,9 @@ class Enrollment(models.Model):
         unique_together = ("user", "course")
         indexes = [
             models.Index(fields=["user"], name="enrollment_user_idx"),
-            models.Index(fields=["user", "is_completed"], name="enrollment_user_completed_idx"),
+            models.Index(
+                fields=["user", "is_completed"], name="enrollment_user_completed_idx"
+            ),
         ]
 
     def __str__(self):
@@ -274,7 +277,7 @@ class Lesson(models.Model):
     )
     is_released = models.BooleanField(
         default=False,
-        help_text="Non-live lessons: mark as released to unlock for enrolled students."
+        help_text="Non-live lessons: mark as released to unlock for enrolled students.",
     )
     order = models.PositiveIntegerField(default=0)
 
