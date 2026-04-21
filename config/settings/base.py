@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "memberships",
     "donations",
     "announcements",
+    "discussions",
 ]
 
 MIDDLEWARE = [
