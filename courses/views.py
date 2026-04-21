@@ -870,6 +870,8 @@ class QuizViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ("submit", "my_attempts"):
             return [permissions.IsAuthenticated()]
+        if self.action in ("list", "retrieve"):
+            return [IsAdminOrTeacher()]
         return [IsAdminRole()]
 
     @extend_schema(
