@@ -103,7 +103,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Assignment
         fields = "__all__"
-        extra_kwargs = {"lesson": {"required": False}}
+        extra_kwargs = {"lesson": {"read_only": True}}
 
 
 class LessonSerializer(serializers.ModelSerializer):
