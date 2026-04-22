@@ -140,6 +140,18 @@ class CourseViewSet(viewsets.ModelViewSet):
 
         return base_qs.filter(is_active=True)
 
+    def perform_create(self, serializer):
+        # Auto-assign creator's TeacherProfile if teacher_id was not explicitly provided
+        if serializer.validated_data.get("teacher") is None:
+            from accounts.models import TeacherProfile
+            try:
+                teacher = TeacherProfile.objects.get(user=self.request.user)
+                serializer.save(teacher=teacher)
+                return
+            except TeacherProfile.DoesNotExist:
+                pass
+        serializer.save()
+
     def retrieve(self, request, *args, **kwargs):
         from django.db.models import Count
         instance = self.get_object()
