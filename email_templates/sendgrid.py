@@ -183,6 +183,25 @@ _FALLBACK_EMAILS = {
             "We'll be in touch with further details."
         ),
     ),
+    "consultation_reschedule_accepted": (
+        "Reschedule Request Accepted",
+        lambda d: (
+            f"Hi {d.get('first_name', 'there')},\n\n"
+            f"Your request to reschedule your consultation has been accepted.\n\n"
+            f"New slot: {d.get('new_slot_time', 'the new time')}\n"
+            f"Old slot: {d.get('old_slot_time', 'the previous time')}\n\n"
+            "Please check your dashboard for your updated Zoom link."
+        ),
+    ),
+    "consultation_reschedule_declined": (
+        "Reschedule Request Declined",
+        lambda d: (
+            f"Hi {d.get('first_name', 'there')},\n\n"
+            f"Unfortunately, your request to reschedule your consultation has been declined.\n\n"
+            f"Your original slot ({d.get('old_slot_time', 'the original time')}) remains unchanged.\n\n"
+            "Please contact support if you have any questions."
+        ),
+    ),
     "certificate_issued": (
         "Your Certificate is Ready",
         lambda d: (

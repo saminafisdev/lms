@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 from config.permissions import IsAdminRole, IsTeacherRole
 from orders.stripe import create_checkout_session
 
-from .models import AvailableTimeslot, Bundle, Consultation, ConsultationPurchase, RecurringAvailability
+from .models import AvailableTimeslot, Bundle, Consultation, ConsultationPurchase, RecurringAvailability, RescheduleRequest
 from .serializers import (
     AvailableTimeslotSerializer,
     ConsultationBookSerializer,
@@ -21,6 +21,7 @@ from .serializers import (
     ConsultationPurchaseSerializer,
     ConsultationSerializer,
     RecurringAvailabilitySerializer,
+    RescheduleRequestSerializer,
     TimeslotSlimSerializer,
 )
 
@@ -301,8 +302,6 @@ class ConsultationPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ConsultationPurchaseSerializer
 
     def get_permissions(self):
-        if self.action == "reschedule":
-            return [IsAdminRole()]
         if getattr(self.request.user, "role", None) == "admin":
             return [IsAdminRole()]
         return [permissions.IsAuthenticated()]
@@ -317,31 +316,48 @@ class ConsultationPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
             "consultation", "bundle_applied"
         ).prefetch_related("booked_slots")
 
-    @action(detail=True, methods=["post"], url_path="reschedule")
-    def reschedule(self, request, pk=None):
-        """
-        POST /consultation-purchases/{id}/reschedule/
-        Admin only. Move one booked slot to a new available slot.
-        Body: { "old_slot_id": <int>, "new_slot_id": <int> }
-        """
+    @extend_schema(
+        summary="Request a reschedule",
+        description=(
+            "Student submits a reschedule request for one of their booked slots.\n\n"
+            "- `old_slot_id`: the currently booked slot to move away from (must belong to this purchase).\n"
+            "- `new_slot_id`: the desired new slot (must be unbooked and in the same consultation).\n"
+            "- `reason`: optional free-text reason.\n\n"
+            "Only one pending reschedule request per slot is allowed at a time. "
+            "Cancel the existing request before submitting a new one."
+        ),
+        request=inline_serializer(
+            name="RescheduleRequestInput",
+            fields={
+                "old_slot_id": drf_serializers.IntegerField(),
+                "new_slot_id": drf_serializers.IntegerField(),
+                "reason": drf_serializers.CharField(required=False, allow_blank=True),
+            },
+        ),
+        responses={
+            201: RescheduleRequestSerializer,
+            400: OpenApiParameter(name="error", description="Validation error"),
+        },
+        tags=["Consultations"],
+    )
+    @action(detail=True, methods=["post"], url_path="request-reschedule", permission_classes=[permissions.IsAuthenticated])
+    def request_reschedule(self, request, pk=None):
         purchase = self.get_object()
+
+        if purchase.student != request.user:
+            return Response({"error": "You can only request reschedules for your own purchases."}, status=status.HTTP_403_FORBIDDEN)
 
         old_slot_id = request.data.get("old_slot_id")
         new_slot_id = request.data.get("new_slot_id")
+        reason = request.data.get("reason", "")
 
         if not old_slot_id or not new_slot_id:
-            return Response(
-                {"error": "Both old_slot_id and new_slot_id are required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": "Both old_slot_id and new_slot_id are required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             old_slot = purchase.booked_slots.get(id=old_slot_id)
         except AvailableTimeslot.DoesNotExist:
-            return Response(
-                {"error": "old_slot_id is not part of this purchase."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": "old_slot_id is not part of this purchase."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             new_slot = AvailableTimeslot.objects.get(
@@ -350,45 +366,179 @@ class ConsultationPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
                 is_booked=False,
             )
         except AvailableTimeslot.DoesNotExist:
-            return Response(
-                {"error": "new_slot_id is unavailable or does not belong to the same consultation."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": "new_slot_id is unavailable or does not belong to the same consultation."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Cancel old Zoom meeting if one exists
-        if old_slot.zoom_meeting_id:
-            try:
-                from config.zoom import delete_meeting
-                delete_meeting(old_slot.zoom_meeting_id)
-            except Exception as e:
-                logger.warning(f"Failed to delete Zoom meeting {old_slot.zoom_meeting_id}: {e}")
+        if RescheduleRequest.objects.filter(old_slot=old_slot, status=RescheduleRequest.STATUS_PENDING).exists():
+            return Response({"error": "A pending reschedule request for this slot already exists. Cancel it before submitting a new one."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Unbook old slot
-        old_slot.is_booked = False
-        old_slot.zoom_meeting_id = None
-        old_slot.zoom_join_url = None
-        old_slot.zoom_start_url = None
-        old_slot.save(update_fields=["is_booked", "zoom_meeting_id", "zoom_join_url", "zoom_start_url"])
-
-        # Book new slot
-        new_slot.is_booked = True
-        new_slot.save(update_fields=["is_booked"])
-
-        # Swap in the purchase
-        purchase.booked_slots.remove(old_slot)
-        purchase.booked_slots.add(new_slot)
-
-        # Create new Zoom meeting async
-        from config.tasks import create_zoom_meeting_for_slot_task
-        student_name = purchase.student.get_full_name() or purchase.student.email
-        create_zoom_meeting_for_slot_task.delay(
-            new_slot.id,
-            purchase.consultation.title,
-            student_name,
+        rr = RescheduleRequest.objects.create(
+            purchase=purchase,
+            old_slot=old_slot,
+            requested_slot=new_slot,
+            reason=reason,
         )
+        return Response(RescheduleRequestSerializer(rr).data, status=status.HTTP_201_CREATED)
 
-        serializer = self.get_serializer(purchase)
-        return Response(serializer.data)
+
+def _perform_slot_swap(purchase, old_slot, new_slot):
+    """Swap slots on a purchase and fire Zoom creation task."""
+    if old_slot.zoom_meeting_id:
+        try:
+            from config.zoom import delete_meeting
+            delete_meeting(old_slot.zoom_meeting_id)
+        except Exception as e:
+            logger.warning(f"Failed to delete Zoom meeting {old_slot.zoom_meeting_id}: {e}")
+
+    old_slot.is_booked = False
+    old_slot.zoom_meeting_id = None
+    old_slot.zoom_join_url = None
+    old_slot.zoom_start_url = None
+    old_slot.save(update_fields=["is_booked", "zoom_meeting_id", "zoom_join_url", "zoom_start_url"])
+
+    new_slot.is_booked = True
+    new_slot.save(update_fields=["is_booked"])
+
+    purchase.booked_slots.remove(old_slot)
+    purchase.booked_slots.add(new_slot)
+
+    from config.tasks import create_zoom_meeting_for_slot_task
+    student_name = purchase.student.get_full_name() or purchase.student.email
+    create_zoom_meeting_for_slot_task.delay(new_slot.id, purchase.consultation.title, student_name)
+
+
+class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = RescheduleRequestSerializer
+
+    def get_permissions(self):
+        if self.action in ("accept", "decline"):
+            return [IsAdminRole()]
+        return [permissions.IsAuthenticated()]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff or getattr(user, "role", None) == "admin":
+            qs = RescheduleRequest.objects.select_related(
+                "purchase__student", "old_slot", "requested_slot"
+            ).all()
+        else:
+            qs = RescheduleRequest.objects.filter(
+                purchase__student=user
+            ).select_related("purchase", "old_slot", "requested_slot")
+
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        return qs
+
+    @extend_schema(
+        summary="Cancel a reschedule request",
+        description="Student cancels their own pending reschedule request.",
+        request=None,
+        responses={
+            200: RescheduleRequestSerializer,
+            400: OpenApiParameter(name="error", description="Request is not pending"),
+            403: OpenApiParameter(name="error", description="Not your request"),
+        },
+        tags=["Consultations"],
+    )
+    @action(detail=True, methods=["post"], url_path="cancel", permission_classes=[permissions.IsAuthenticated])
+    def cancel(self, request, pk=None):
+        rr = self.get_object()
+        if rr.purchase.student != request.user:
+            return Response({"error": "You can only cancel your own reschedule requests."}, status=status.HTTP_403_FORBIDDEN)
+        if rr.status != RescheduleRequest.STATUS_PENDING:
+            return Response({"error": "Only pending requests can be cancelled."}, status=status.HTTP_400_BAD_REQUEST)
+        rr.status = RescheduleRequest.STATUS_CANCELLED
+        rr.save(update_fields=["status", "updated_at"])
+        return Response(RescheduleRequestSerializer(rr).data)
+
+    @extend_schema(
+        summary="Accept a reschedule request",
+        description=(
+            "Admin accepts the student's reschedule request.\n\n"
+            "- Performs the slot swap.\n"
+            "- Fires Zoom meeting creation for the new slot.\n"
+            "- Sends the student an email notification.\n\n"
+            "**Permissions:** Admin only."
+        ),
+        request=None,
+        responses={
+            200: RescheduleRequestSerializer,
+            400: OpenApiParameter(name="error", description="Request is not pending or new slot is no longer available"),
+        },
+        tags=["Consultations"],
+    )
+    @action(detail=True, methods=["post"], url_path="accept")
+    def accept(self, request, pk=None):
+        rr = self.get_object()
+        if rr.status != RescheduleRequest.STATUS_PENDING:
+            return Response({"error": "Only pending requests can be accepted."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Re-check the requested slot is still free
+        new_slot = rr.requested_slot
+        if new_slot.is_booked:
+            return Response({"error": "The requested slot is no longer available."}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            _perform_slot_swap(rr.purchase, rr.old_slot, new_slot)
+            rr.status = RescheduleRequest.STATUS_ACCEPTED
+            rr.save(update_fields=["status", "updated_at"])
+
+        student = rr.purchase.student
+        try:
+            from email_templates.sendgrid import send_email
+            send_email(
+                to_email=student.email,
+                purpose="consultation_reschedule_accepted",
+                template_data={
+                    "first_name": student.first_name or student.email,
+                    "old_slot_time": str(rr.old_slot.scheduled_start),
+                    "new_slot_time": str(new_slot.scheduled_start),
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send reschedule accepted email to {student.email}: {e}")
+
+        return Response(RescheduleRequestSerializer(rr).data)
+
+    @extend_schema(
+        summary="Decline a reschedule request",
+        description=(
+            "Admin declines the student's reschedule request. No slot swap occurs.\n\n"
+            "The student is notified by email.\n\n"
+            "**Permissions:** Admin only."
+        ),
+        request=None,
+        responses={
+            200: RescheduleRequestSerializer,
+            400: OpenApiParameter(name="error", description="Request is not pending"),
+        },
+        tags=["Consultations"],
+    )
+    @action(detail=True, methods=["post"], url_path="decline")
+    def decline(self, request, pk=None):
+        rr = self.get_object()
+        if rr.status != RescheduleRequest.STATUS_PENDING:
+            return Response({"error": "Only pending requests can be declined."}, status=status.HTTP_400_BAD_REQUEST)
+
+        rr.status = RescheduleRequest.STATUS_DECLINED
+        rr.save(update_fields=["status", "updated_at"])
+
+        student = rr.purchase.student
+        try:
+            from email_templates.sendgrid import send_email
+            send_email(
+                to_email=student.email,
+                purpose="consultation_reschedule_declined",
+                template_data={
+                    "first_name": student.first_name or student.email,
+                    "old_slot_time": str(rr.old_slot.scheduled_start),
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send reschedule declined email to {student.email}: {e}")
+
+        return Response(RescheduleRequestSerializer(rr).data)
 
 
 

@@ -142,3 +142,43 @@ class ConsultationPurchase(models.Model):
 
     def __str__(self):
         return f"Purchase by {self.student.email} for {self.consultation.title}"
+
+
+class RescheduleRequest(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_DECLINED = "declined"
+    STATUS_CANCELLED = "cancelled"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_ACCEPTED, "Accepted"),
+        (STATUS_DECLINED, "Declined"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
+
+    purchase = models.ForeignKey(
+        ConsultationPurchase,
+        on_delete=models.CASCADE,
+        related_name="reschedule_requests",
+    )
+    old_slot = models.ForeignKey(
+        AvailableTimeslot,
+        on_delete=models.CASCADE,
+        related_name="reschedule_requests_as_old",
+    )
+    requested_slot = models.ForeignKey(
+        AvailableTimeslot,
+        on_delete=models.CASCADE,
+        related_name="reschedule_requests_as_new",
+    )
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    reason = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"RescheduleRequest #{self.pk} [{self.status}] for purchase #{self.purchase_id}"

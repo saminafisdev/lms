@@ -6,12 +6,14 @@ from .views import (
     BundleViewSet,
     ConsultationPurchaseViewSet,
     RecurringAvailabilityViewSet,
+    RescheduleRequestViewSet,
     TeacherConsultationViewSet,
 )
 
 router = routers.DefaultRouter()
 router.register(r"consultations", ConsultationViewSet)
 router.register(r"consultation-purchases", ConsultationPurchaseViewSet, basename="consultation-purchase")
+router.register(r"reschedule-requests", RescheduleRequestViewSet, basename="reschedule-request")
 
 consultation_router = routers.NestedDefaultRouter(router, r"consultations", lookup="consultation")
 consultation_router.register(r"timeslots", AvailableTimeslotViewSet, basename="consultation-timeslots")

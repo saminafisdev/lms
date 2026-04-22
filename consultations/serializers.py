@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from accounts.serializers import CourseTeacherSerializer
-from .models import Consultation, AvailableTimeslot, Bundle, ConsultationPurchase, RecurringAvailability
+from .models import Consultation, AvailableTimeslot, Bundle, ConsultationPurchase, RecurringAvailability, RescheduleRequest
 
 
 class RecurringAvailabilitySerializer(serializers.ModelSerializer):
@@ -116,3 +116,26 @@ class ConsultationPurchaseSerializer(serializers.ModelSerializer):
             f"{obj.student.first_name} {obj.student.last_name}".strip()
             or obj.student.email
         )
+
+
+class RescheduleRequestSerializer(serializers.ModelSerializer):
+    student_email = serializers.EmailField(source="purchase.student.email", read_only=True)
+    old_slot_time = serializers.DateTimeField(source="old_slot.scheduled_start", read_only=True)
+    requested_slot_time = serializers.DateTimeField(source="requested_slot.scheduled_start", read_only=True)
+
+    class Meta:
+        model = RescheduleRequest
+        fields = [
+            "id",
+            "purchase",
+            "old_slot",
+            "old_slot_time",
+            "requested_slot",
+            "requested_slot_time",
+            "status",
+            "reason",
+            "student_email",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "status", "student_email", "old_slot_time", "requested_slot_time", "created_at", "updated_at"]
