@@ -216,6 +216,19 @@ _REPLY_OWN_OR_ADMIN = "**Permissions:** Reply author, or admin."
         },
         tags=["Discussions"],
     ),
+    retrieve=extend_schema(
+        summary="Retrieve a single reply",
+        description=(
+            "Returns a single reply including its nested `children`.\n\n"
+            + _REPLY_ACCESS_NOTE
+        ),
+        responses={
+            200: ReplySerializer,
+            403: OpenApiResponse(description="Not enrolled / not authenticated."),
+            404: OpenApiResponse(description="Reply not found."),
+        },
+        tags=["Discussions"],
+    ),
     create=extend_schema(
         summary="Add a reply to a discussion post",
         description=(
