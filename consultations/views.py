@@ -346,7 +346,10 @@ class ConsultationPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
         ),
         responses={
             201: RescheduleRequestSerializer,
-            400: OpenApiParameter(name="error", description="Validation error"),
+            400: OpenApiResponse(
+                description="Validation error (missing fields, slot not part of purchase, slot unavailable, or duplicate pending request).",
+                response=inline_serializer("RequestRescheduleError400", fields={"error": drf_serializers.CharField()}),
+            ),
         },
         tags=["Consultations"],
     )
@@ -450,8 +453,14 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
         request=None,
         responses={
             200: RescheduleRequestSerializer,
-            400: OpenApiResponse(description="Request is not pending."),
-            403: OpenApiResponse(description="Not your request."),
+            400: OpenApiResponse(
+                description="Request is not pending.",
+                response=inline_serializer("CancelError400", fields={"error": drf_serializers.CharField()}),
+            ),
+            403: OpenApiResponse(
+                description="Not your request.",
+                response=inline_serializer("CancelError403", fields={"error": drf_serializers.CharField()}),
+            ),
         },
         tags=["Consultations"],
     )
@@ -481,7 +490,10 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
         request=None,
         responses={
             200: RescheduleRequestSerializer,
-            400: OpenApiResponse(description="Request is not pending, or the requested slot was booked by someone else in the meantime."),
+            400: OpenApiResponse(
+                description="Request is not pending, or the requested slot was booked by someone else.",
+                response=inline_serializer("AcceptError400", fields={"error": drf_serializers.CharField()}),
+            ),
         },
         tags=["Consultations"],
     )
@@ -528,7 +540,10 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
         request=None,
         responses={
             200: RescheduleRequestSerializer,
-            400: OpenApiResponse(description="Request is not pending."),
+            400: OpenApiResponse(
+                description="Request is not pending.",
+                response=inline_serializer("DeclineError400", fields={"error": drf_serializers.CharField()}),
+            ),
         },
         tags=["Consultations"],
     )
