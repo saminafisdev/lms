@@ -1,9 +1,10 @@
 from django.conf import settings
 from django.db import transaction
 import logging
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
-from rest_framework import permissions, serializers as drf_serializers, status, viewsets
+from rest_framework import permissions, serializers as drf_serializers, status, viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -31,6 +32,9 @@ class ConsultationViewSet(viewsets.ModelViewSet):
         .all()
     )
     serializer_class = ConsultationSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = {"teacher": ["exact"], "teacher__user__email": ["icontains", "exact"]}
+    search_fields = ["teacher__user__first_name", "teacher__user__last_name", "teacher__user__email", "title"]
 
     def get_serializer_class(self):
         if self.action == "book":
