@@ -2,7 +2,7 @@ from django.conf import settings
 from django.db import transaction
 import logging
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer, OpenApiParameter
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer, OpenApiParameter, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import permissions, serializers as drf_serializers, status, viewsets, filters
 from rest_framework.decorators import action
@@ -450,8 +450,8 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
         request=None,
         responses={
             200: RescheduleRequestSerializer,
-            400: OpenApiParameter(name="error", description="Request is not pending"),
-            403: OpenApiParameter(name="error", description="Not your request"),
+            400: OpenApiResponse(description="Request is not pending."),
+            403: OpenApiResponse(description="Not your request."),
         },
         tags=["Consultations"],
     )
@@ -473,12 +473,15 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
             "- Performs the slot swap.\n"
             "- Fires Zoom meeting creation for the new slot.\n"
             "- Sends the student an email notification.\n\n"
-            "**Permissions:** Admin only."
+            "**Permissions:** Admin only.\n\n"
+            "**400 cases:**\n"
+            "- `\"Only pending requests can be accepted.\"` — request is already accepted/declined/cancelled.\n"
+            "- `\"The requested slot is no longer available.\"` — another booking took the slot between the request and acceptance."
         ),
         request=None,
         responses={
             200: RescheduleRequestSerializer,
-            400: OpenApiParameter(name="error", description="Request is not pending or new slot is no longer available"),
+            400: OpenApiResponse(description="Request is not pending, or the requested slot was booked by someone else in the meantime."),
         },
         tags=["Consultations"],
     )
@@ -525,7 +528,7 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
         request=None,
         responses={
             200: RescheduleRequestSerializer,
-            400: OpenApiParameter(name="error", description="Request is not pending"),
+            400: OpenApiResponse(description="Request is not pending."),
         },
         tags=["Consultations"],
     )
