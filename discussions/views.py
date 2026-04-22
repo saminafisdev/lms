@@ -1,5 +1,6 @@
 import logging
 
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -30,16 +31,85 @@ def _can_access_course(user, course):
     return hasattr(user, "membership") and user.membership.is_currently_active
 
 
+_POST_ACCESS_NOTE = (
+    "**Access:** Enrolled students, the course teacher, active membership holders, and admins."
+)
+_ADMIN_ONLY_NOTE = "**Permissions:** Admin only."
+_OWN_OR_ADMIN_NOTE = "**Permissions:** Author of the post, or admin."
+
+
+@extend_schema_view(
+    list=extend_schema(
+        summary="List discussion posts",
+        description=(
+            "Returns all discussion posts for the given course, ordered by pinned-first then newest.\n\n"
+            + _POST_ACCESS_NOTE
+        ),
+        responses={
+            200: PostSerializer(many=True),
+            403: OpenApiResponse(description="Not enrolled / not authenticated."),
+        },
+        tags=["Discussions"],
+    ),
+    create=extend_schema(
+        summary="Create a discussion post",
+        description=(
+            "Creates a new discussion post in the course.\n\n"
+            "- `title` and `body` are required.\n"
+            "- `author`, `course`, `is_pinned`, and `is_closed` are set automatically and cannot be supplied.\n\n"
+            + _POST_ACCESS_NOTE
+        ),
+        request=PostSerializer,
+        responses={
+            201: PostSerializer,
+            403: OpenApiResponse(description="Not enrolled / not authenticated."),
+        },
+        tags=["Discussions"],
+    ),
+    retrieve=extend_schema(
+        summary="Retrieve a discussion post with replies",
+        description=(
+            "Returns a single post including its full reply tree (top-level replies with nested children).\n\n"
+            + _POST_ACCESS_NOTE
+        ),
+        responses={
+            200: PostDetailSerializer,
+            403: OpenApiResponse(description="Not enrolled / not authenticated."),
+            404: OpenApiResponse(description="Post not found."),
+        },
+        tags=["Discussions"],
+    ),
+    partial_update=extend_schema(
+        summary="Edit a discussion post",
+        description=(
+            "Partially updates a post (PATCH). Only `title` and `body` can be changed.\n\n"
+            + _OWN_OR_ADMIN_NOTE + "\n\n"
+            "Editing is blocked if the discussion is closed (admins are exempt)."
+        ),
+        request=PostSerializer,
+        responses={
+            200: PostSerializer,
+            403: OpenApiResponse(description="Not the author, or discussion is closed."),
+            404: OpenApiResponse(description="Post not found."),
+        },
+        tags=["Discussions"],
+    ),
+    update=extend_schema(exclude=True),
+    destroy=extend_schema(
+        summary="Delete a discussion post",
+        description=(
+            "Permanently deletes a post and all its replies.\n\n"
+            + _ADMIN_ONLY_NOTE
+        ),
+        responses={
+            204: OpenApiResponse(description="Deleted successfully."),
+            403: OpenApiResponse(description="Admin only."),
+            404: OpenApiResponse(description="Post not found."),
+        },
+        tags=["Discussions"],
+    ),
+)
 class PostViewSet(viewsets.ModelViewSet):
-    """
-    GET    /courses/{slug}/discussions/           — list posts
-    POST   /courses/{slug}/discussions/           — create post
-    GET    /courses/{slug}/discussions/{id}/      — retrieve post + replies
-    PATCH  /courses/{slug}/discussions/{id}/      — edit own post (or admin)
-    DELETE /courses/{slug}/discussions/{id}/      — admin only
-    POST   /courses/{slug}/discussions/{id}/pin/  — admin only
-    POST   /courses/{slug}/discussions/{id}/close/ — admin only
-    """
 
     def get_queryset(self):
         course = _get_course(self.kwargs)
@@ -84,6 +154,20 @@ class PostViewSet(viewsets.ModelViewSet):
         kwargs["partial"] = True
         return super().update(request, *args, **kwargs)
 
+    @extend_schema(
+        summary="Toggle pin on a discussion post",
+        description=(
+            "Toggles the `is_pinned` flag on a post. Pinned posts appear at the top of the list.\n\n"
+            + _ADMIN_ONLY_NOTE
+        ),
+        request=None,
+        responses={
+            200: OpenApiResponse(description='`{"is_pinned": true|false}`'),
+            403: OpenApiResponse(description="Admin only."),
+            404: OpenApiResponse(description="Post not found."),
+        },
+        tags=["Discussions"],
+    )
     @action(detail=True, methods=["post"], url_path="pin")
     def pin(self, request, **kwargs):
         post = self.get_object()
@@ -91,6 +175,20 @@ class PostViewSet(viewsets.ModelViewSet):
         post.save(update_fields=["is_pinned"])
         return Response({"is_pinned": post.is_pinned})
 
+    @extend_schema(
+        summary="Toggle close on a discussion post",
+        description=(
+            "Toggles the `is_closed` flag. When closed, no new replies can be added (admins are exempt).\n\n"
+            + _ADMIN_ONLY_NOTE
+        ),
+        request=None,
+        responses={
+            200: OpenApiResponse(description='`{"is_closed": true|false}`'),
+            403: OpenApiResponse(description="Admin only."),
+            404: OpenApiResponse(description="Post not found."),
+        },
+        tags=["Discussions"],
+    )
     @action(detail=True, methods=["post"], url_path="close")
     def close(self, request, **kwargs):
         post = self.get_object()
@@ -99,6 +197,71 @@ class PostViewSet(viewsets.ModelViewSet):
         return Response({"is_closed": post.is_closed})
 
 
+_REPLY_ACCESS_NOTE = (
+    "**Access:** Enrolled students, the course teacher, active membership holders, and admins."
+)
+_REPLY_OWN_OR_ADMIN = "**Permissions:** Reply author, or admin."
+
+
+@extend_schema_view(
+    list=extend_schema(
+        summary="List replies for a discussion post",
+        description=(
+            "Returns top-level replies only. Each reply includes nested `children` (one level deep).\n\n"
+            + _REPLY_ACCESS_NOTE
+        ),
+        responses={
+            200: ReplySerializer(many=True),
+            403: OpenApiResponse(description="Not enrolled / not authenticated."),
+        },
+        tags=["Discussions"],
+    ),
+    create=extend_schema(
+        summary="Add a reply to a discussion post",
+        description=(
+            "Creates a top-level reply or a threaded child reply.\n\n"
+            "- Supply `parent` (reply ID) to create a child reply (one level deep only).\n"
+            "- Omit `parent` for a top-level reply.\n"
+            "- `post` and `author` are set automatically.\n\n"
+            + _REPLY_ACCESS_NOTE + "\n\n"
+            "Returns 403 if the discussion is closed (admins are exempt)."
+        ),
+        request=ReplySerializer,
+        responses={
+            201: ReplySerializer,
+            403: OpenApiResponse(description="Not enrolled, or discussion is closed."),
+        },
+        tags=["Discussions"],
+    ),
+    partial_update=extend_schema(
+        summary="Edit a reply",
+        description=(
+            "Partially updates a reply's `body` (PATCH).\n\n"
+            + _REPLY_OWN_OR_ADMIN
+        ),
+        request=ReplySerializer,
+        responses={
+            200: ReplySerializer,
+            403: OpenApiResponse(description="Not the author."),
+            404: OpenApiResponse(description="Reply not found."),
+        },
+        tags=["Discussions"],
+    ),
+    update=extend_schema(exclude=True),
+    destroy=extend_schema(
+        summary="Delete a reply",
+        description=(
+            "Permanently deletes a reply and its children.\n\n"
+            + _REPLY_OWN_OR_ADMIN
+        ),
+        responses={
+            204: OpenApiResponse(description="Deleted successfully."),
+            403: OpenApiResponse(description="Not the author."),
+            404: OpenApiResponse(description="Reply not found."),
+        },
+        tags=["Discussions"],
+    ),
+)
 class ReplyViewSet(viewsets.ModelViewSet):
     """
     GET    /courses/{slug}/discussions/{post_pk}/replies/      — list replies
