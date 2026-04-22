@@ -246,7 +246,14 @@ class RecurringAvailabilityViewSet(viewsets.ModelViewSet):
                 location=OpenApiParameter.QUERY,
                 required=False,
                 description="Filter timeslots by a specific day (YYYY-MM-DD).",
-            )
+            ),
+            OpenApiParameter(
+                name="is_booked",
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Filter by booking status. `true` = booked slots only, `false` = available slots only.",
+            ),
         ]
     )
 )
@@ -272,6 +279,9 @@ class AvailableTimeslotViewSet(viewsets.ModelViewSet):
         date = self.request.query_params.get("date")
         if date:
             queryset = queryset.filter(scheduled_start__date=date)
+        is_booked = self.request.query_params.get("is_booked")
+        if is_booked is not None:
+            queryset = queryset.filter(is_booked=is_booked.lower() == "true")
         return queryset.order_by("scheduled_start")
 
     def perform_create(self, serializer):
