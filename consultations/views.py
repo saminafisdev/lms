@@ -416,6 +416,10 @@ def _perform_slot_swap(purchase, old_slot, new_slot):
     create_zoom_meeting_for_slot_task.delay(new_slot.id, purchase.consultation.title, student_name)
 
 
+@extend_schema_view(
+    list=extend_schema(summary="List reschedule requests", tags=["Consultations"]),
+    retrieve=extend_schema(summary="Retrieve a reschedule request", tags=["Consultations"]),
+)
 class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = RescheduleRequestSerializer
 
