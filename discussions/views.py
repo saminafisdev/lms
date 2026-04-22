@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_course(kwargs):
-    return get_object_or_404(Course, slug=kwargs["course_slug"])
+    return get_object_or_404(Course, pk=kwargs["course_pk"])
 
 
 def _can_access_course(user, course):
