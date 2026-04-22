@@ -286,10 +286,11 @@ class ReplyViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        return Reply.objects.filter(
-            post_id=self.kwargs["post_pk"],
-            parent__isnull=True,  # top-level only; children nested via serializer
-        ).select_related("author").prefetch_related("children__author")
+        base = Reply.objects.filter(post_id=self.kwargs["post_pk"])
+        if self.action == "list":
+            # List returns top-level only; children are nested inside each reply
+            return base.filter(parent__isnull=True).select_related("author").prefetch_related("children__author")
+        return base.select_related("author")
 
     def get_permissions(self):
         return [permissions.IsAuthenticated()]
