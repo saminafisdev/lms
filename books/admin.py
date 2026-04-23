@@ -38,12 +38,14 @@ class BookAdmin(admin.ModelAdmin):
             "fields": ("has_physical", "physical_price", "stock_count")
         }),
         ("Lulu Print-on-Demand", {
-            "fields": ("lulu_pod_package_id",),
+            "fields": ("lulu_pod_package_id", "lulu_cover_pdf"),
             "description": (
-                "Set this to enable automatic printing and international shipping via Lulu. "
+                "Set these to enable automatic printing and international shipping via Lulu. "
                 "The interior PDF is taken from the uploaded digital_file. "
                 "pod_package_id encodes paper size, binding, and color — "
-                "e.g. 0600X0900BWSTDSS060UW444MXX = 6x9 B&W perfect-bound paperback."
+                "e.g. 0600X0900BWSTDSS060UW444MXX = 6x9 B&W perfect-bound paperback. "
+                "lulu_cover_pdf must be a print-ready PDF (front + spine + back with bleed) — "
+                "NOT a JPEG or WebP. Generate it using Lulu's cover generator."
             ),
         }),
         ("Digital Version", {

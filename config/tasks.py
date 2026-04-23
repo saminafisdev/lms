@@ -108,7 +108,16 @@ def create_lulu_print_job_task(self, order_item_id):
             )
             return None
 
+        if not book.lulu_cover_pdf:
+            logger.warning(
+                "Book %s has no lulu_cover_pdf — skipping Lulu print job for OrderItem %s. "
+                "Upload a print-ready cover PDF (not a JPEG/WebP image).",
+                book.id, item.id,
+            )
+            return None
+
         interior_pdf_url = book.digital_file.url
+        cover_pdf_url = book.lulu_cover_pdf.url
 
         shipping = {
             "name": address.full_name,
@@ -124,7 +133,7 @@ def create_lulu_print_job_task(self, order_item_id):
         result = create_print_job(
             title=book.title,
             interior_pdf_url=interior_pdf_url,
-            cover_image_url=book.cover_image.url if book.cover_image else "",
+            cover_image_url=cover_pdf_url,
             pod_package_id=book.lulu_pod_package_id,
             quantity=item.quantity,
             contact_email=order.user.email,

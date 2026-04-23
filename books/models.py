@@ -64,6 +64,14 @@ class Book(models.Model):
         max_length=100, blank=True, null=True,
         help_text="Lulu pod_package_id encoding paper size, binding, color. e.g. 0600X0900BWSTDSS060UW444MXX"
     )
+    lulu_cover_pdf = models.FileField(
+        upload_to="books/lulu_covers/", validators=[validate_pdf], blank=True, null=True,
+        help_text=(
+            "Print-ready cover PDF for Lulu (front + spine + back with bleed). "
+            "Must be a PDF — JPEG/WebP images are NOT accepted by Lulu. "
+            "Generate using Lulu's cover generator or a design tool."
+        )
+    )
     
     has_digital = models.BooleanField(default=False)
     digital_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
