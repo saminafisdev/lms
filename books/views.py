@@ -227,6 +227,32 @@ class BookViewSet(viewsets.ModelViewSet):
 
         return HttpResponseRedirect(book.digital_file.url)
 
+    @extend_schema(
+        responses={200: inline_serializer("LuluSpecsSerializer", fields={
+            "results": drf_serializers.ListField(child=drf_serializers.DictField()),
+        })},
+        summary="List available Lulu pod_package_id options",
+        description="Admin only. Returns all print specs from Lulu (paper size, binding, color) to help pick a pod_package_id for a book.",
+        tags=["Books"],
+    )
+    @action(detail=False, methods=["get"], url_path="lulu-packages",
+            permission_classes=[IsAdminRole])
+    def lulu_packages(self, request):
+        """
+        GET /books/lulu-packages/
+        Returns all available Lulu pod_package_id options with descriptions.
+        Admin only.
+        """
+        try:
+            from orders.lulu import get_print_specs
+            data = get_print_specs()
+            return Response(data)
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to fetch Lulu specifications: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
 
 class BookGalleryImageViewSet(viewsets.ModelViewSet):
     """

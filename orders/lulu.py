@@ -114,3 +114,15 @@ def get_print_job(print_job_id: str) -> dict:
     resp = requests.get(url, headers=_headers(), timeout=15)
     resp.raise_for_status()
     return resp.json()
+
+
+def get_print_specs() -> list:
+    """
+    Fetch all available pod_package_id options from Lulu.
+    Returns a list of dicts with id, description, and attributes
+    (trim size, paper type, color, binding, etc.).
+    """
+    url = f"{settings.LULU_API_URL.rstrip('/')}/print-jobs/specifications/"
+    resp = requests.get(url, headers=_headers(), timeout=15)
+    resp.raise_for_status()
+    return resp.json()
