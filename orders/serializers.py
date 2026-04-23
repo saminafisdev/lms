@@ -67,7 +67,7 @@ class AddToCartSerializer(serializers.Serializer):
 
         if item_type == CartItem.ItemType.COURSE:
             try:
-                obj = Course.objects.get(id=object_id, status="published")
+                obj = Course.objects.get(id=object_id)
             except Course.DoesNotExist:
                 raise serializers.ValidationError({"object_id": "Course not found."})
             if already_owns(user, obj):
