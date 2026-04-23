@@ -24,9 +24,7 @@ http:
         "content_type": "video",
         "duration_in_minutes": 10,
         "is_preview": false,
-        "is_released": true,
-        "order": 11,
-        "module": 1
+        "is_released": true
       }
   auth: inherit
 

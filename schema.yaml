@@ -185,6 +185,14 @@ paths:
         name: assignment
         schema:
           type: integer
+      - in: query
+        name: assignment__lesson__module
+        schema:
+          type: integer
+      - in: query
+        name: assignment__lesson__module__course
+        schema:
+          type: integer
       - name: page
         required: false
         in: query
@@ -197,6 +205,12 @@ paths:
         description: Number of results to return per page.
         schema:
           type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
       - in: query
         name: status
         schema:
@@ -213,6 +227,22 @@ paths:
         name: user
         schema:
           type: integer
+      - in: query
+        name: user__email
+        schema:
+          type: string
+      - in: query
+        name: user__email__icontains
+        schema:
+          type: string
+      - in: query
+        name: user__first_name__icontains
+        schema:
+          type: string
+      - in: query
+        name: user__last_name__icontains
+        schema:
+          type: string
       tags:
       - assignment-submissions
       security:
@@ -2665,13 +2695,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ConsultationPurchase'
           description: ''
-  /consultation-purchases/{id}/reschedule/:
+  /consultation-purchases/{id}/request-reschedule/:
     post:
-      operationId: consultation_purchases_reschedule_create
+      operationId: consultation_purchases_request_reschedule_create
       description: |-
-        POST /consultation-purchases/{id}/reschedule/
-        Admin only. Move one booked slot to a new available slot.
-        Body: { "old_slot_id": <int>, "new_slot_id": <int> }
+        Student submits a reschedule request for one of their booked slots.
+
+        - `old_slot_id`: the currently booked slot to move away from (must belong to this purchase).
+        - `new_slot_id`: the desired new slot (must be unbooked and in the same consultation).
+        - `reason`: optional free-text reason.
+
+        Only one pending reschedule request per slot is allowed at a time. Cancel the existing request before submitting a new one.
+      summary: Request a reschedule
       parameters:
       - in: path
         name: id
@@ -2679,27 +2714,35 @@ paths:
           type: string
         required: true
       tags:
-      - consultation-purchases
+      - Consultations
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ConsultationPurchase'
+              $ref: '#/components/schemas/RescheduleRequestInput'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/ConsultationPurchase'
+              $ref: '#/components/schemas/RescheduleRequestInput'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/ConsultationPurchase'
+              $ref: '#/components/schemas/RescheduleRequestInput'
+        required: true
       security:
       - jwtAuth: []
       responses:
-        '200':
+        '201':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConsultationPurchase'
+                $ref: '#/components/schemas/RescheduleRequest'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestRescheduleError400'
+          description: Validation error (missing fields, slot not part of purchase,
+            slot unavailable, or duplicate pending request).
   /consultations/:
     get:
       operationId: consultations_list
@@ -2716,10 +2759,29 @@ paths:
         description: Number of results to return per page.
         schema:
           type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: teacher
+        schema:
+          type: integer
+      - in: query
+        name: teacher__user__email
+        schema:
+          type: string
+      - in: query
+        name: teacher__user__email__icontains
+        schema:
+          type: string
       tags:
       - consultations
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -3348,6 +3410,12 @@ paths:
           type: string
           format: date
         description: Filter timeslots by a specific day (YYYY-MM-DD).
+      - in: query
+        name: is_booked
+        schema:
+          type: boolean
+        description: Filter by booking status. `true` = booked slots only, `false`
+          = available slots only.
       - name: page
         required: false
         in: query
@@ -3364,6 +3432,7 @@ paths:
       - consultations
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -3421,6 +3490,7 @@ paths:
       - consultations
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -3536,6 +3606,7 @@ paths:
       - consultations
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -3686,6 +3757,7 @@ paths:
       - consultations
       security:
       - jwtAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -4053,6 +4125,470 @@ paths:
       responses:
         '204':
           description: No response body
+  /courses/{course_pk}/discussions/:
+    get:
+      operationId: courses_discussions_list
+      description: |-
+        Returns all discussion posts for the given course, ordered by pinned-first then newest.
+
+        **Access:** Enrolled students, the course teacher, active membership holders, and admins.
+      summary: List discussion posts
+      parameters:
+      - in: path
+        name: course_pk
+        schema:
+          type: string
+        required: true
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - Discussions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPostList'
+          description: ''
+        '403':
+          description: Not enrolled / not authenticated.
+    post:
+      operationId: courses_discussions_create
+      description: |-
+        Creates a new discussion post in the course.
+
+        - `title` and `body` are required.
+        - `author`, `course`, `is_pinned`, and `is_closed` are set automatically and cannot be supplied.
+
+        **Access:** Enrolled students, the course teacher, active membership holders, and admins.
+      summary: Create a discussion post
+      parameters:
+      - in: path
+        name: course_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - Discussions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Post'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Post'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Post'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+          description: ''
+        '403':
+          description: Not enrolled / not authenticated.
+  /courses/{course_pk}/discussions/{id}/:
+    get:
+      operationId: courses_discussions_retrieve
+      description: |-
+        Returns a single post including its full reply tree (top-level replies with nested children).
+
+        **Access:** Enrolled students, the course teacher, active membership holders, and admins.
+      summary: Retrieve a discussion post with replies
+      parameters:
+      - in: path
+        name: course_pk
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Discussions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostDetail'
+          description: ''
+        '403':
+          description: Not enrolled / not authenticated.
+        '404':
+          description: Post not found.
+    patch:
+      operationId: courses_discussions_partial_update
+      description: |-
+        Partially updates a post (PATCH). Only `title` and `body` can be changed.
+
+        **Permissions:** Author of the post, or admin.
+
+        Editing is blocked if the discussion is closed (admins are exempt).
+      summary: Edit a discussion post
+      parameters:
+      - in: path
+        name: course_pk
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Discussions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPost'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPost'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPost'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+          description: ''
+        '403':
+          description: Not the author, or discussion is closed.
+        '404':
+          description: Post not found.
+    delete:
+      operationId: courses_discussions_destroy
+      description: |-
+        Permanently deletes a post and all its replies.
+
+        **Permissions:** Admin only.
+      summary: Delete a discussion post
+      parameters:
+      - in: path
+        name: course_pk
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Discussions
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: Deleted successfully.
+        '403':
+          description: Admin only.
+        '404':
+          description: Post not found.
+  /courses/{course_pk}/discussions/{id}/close/:
+    post:
+      operationId: courses_discussions_close_create
+      description: |-
+        Toggles the `is_closed` flag. When closed, no new replies can be added (admins are exempt).
+
+        **Permissions:** Admin only.
+      summary: Toggle close on a discussion post
+      parameters:
+      - in: path
+        name: course_pk
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Discussions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: '`{"is_closed": true|false}`'
+        '403':
+          description: Admin only.
+        '404':
+          description: Post not found.
+  /courses/{course_pk}/discussions/{id}/pin/:
+    post:
+      operationId: courses_discussions_pin_create
+      description: |-
+        Toggles the `is_pinned` flag on a post. Pinned posts appear at the top of the list.
+
+        **Permissions:** Admin only.
+      summary: Toggle pin on a discussion post
+      parameters:
+      - in: path
+        name: course_pk
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Discussions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: '`{"is_pinned": true|false}`'
+        '403':
+          description: Admin only.
+        '404':
+          description: Post not found.
+  /courses/{course_pk}/discussions/{post_pk}/replies/:
+    get:
+      operationId: courses_discussions_replies_list
+      description: |-
+        Returns top-level replies only. Each reply includes nested `children` (one level deep).
+
+        **Access:** Enrolled students, the course teacher, active membership holders, and admins.
+      summary: List replies for a discussion post
+      parameters:
+      - in: path
+        name: course_pk
+        schema:
+          type: string
+        required: true
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: path
+        name: post_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - Discussions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReplyList'
+          description: ''
+        '403':
+          description: Not enrolled / not authenticated.
+    post:
+      operationId: courses_discussions_replies_create
+      description: |-
+        Creates a top-level reply or a threaded child reply.
+
+        - Supply `parent` (reply ID) to create a child reply (one level deep only).
+        - Omit `parent` for a top-level reply.
+        - `post` and `author` are set automatically.
+
+        **Access:** Enrolled students, the course teacher, active membership holders, and admins.
+
+        Returns 403 if the discussion is closed (admins are exempt).
+      summary: Add a reply to a discussion post
+      parameters:
+      - in: path
+        name: course_pk
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: post_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - Discussions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reply'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Reply'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Reply'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reply'
+          description: ''
+        '403':
+          description: Not enrolled, or discussion is closed.
+  /courses/{course_pk}/discussions/{post_pk}/replies/{id}/:
+    get:
+      operationId: courses_discussions_replies_retrieve
+      description: |-
+        Returns a single reply including its nested `children`.
+
+        **Access:** Enrolled students, the course teacher, active membership holders, and admins.
+      summary: Retrieve a single reply
+      parameters:
+      - in: path
+        name: course_pk
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: post_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - Discussions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reply'
+          description: ''
+        '403':
+          description: Not enrolled / not authenticated.
+        '404':
+          description: Reply not found.
+    patch:
+      operationId: courses_discussions_replies_partial_update
+      description: |-
+        Partially updates a reply's `body` (PATCH).
+
+        **Permissions:** Reply author, or admin.
+      summary: Edit a reply
+      parameters:
+      - in: path
+        name: course_pk
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: post_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - Discussions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedReply'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedReply'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedReply'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reply'
+          description: ''
+        '403':
+          description: Not the author.
+        '404':
+          description: Reply not found.
+    delete:
+      operationId: courses_discussions_replies_destroy
+      description: |-
+        Permanently deletes a reply and its children.
+
+        **Permissions:** Reply author, or admin.
+      summary: Delete a reply
+      parameters:
+      - in: path
+        name: course_pk
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: post_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - Discussions
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: Deleted successfully.
+        '403':
+          description: Not the author.
+        '404':
+          description: Reply not found.
   /courses/{course_pk}/modules/:
     get:
       operationId: courses_modules_list
@@ -7502,6 +8038,162 @@ paths:
       responses:
         '200':
           description: No response body
+  /reschedule-requests/:
+    get:
+      operationId: reschedule_requests_list
+      summary: List reschedule requests
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - Consultations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRescheduleRequestList'
+          description: ''
+  /reschedule-requests/{id}/:
+    get:
+      operationId: reschedule_requests_retrieve
+      summary: Retrieve a reschedule request
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Consultations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RescheduleRequest'
+          description: ''
+  /reschedule-requests/{id}/accept/:
+    post:
+      operationId: reschedule_requests_accept_create
+      description: |-
+        Admin accepts the student's reschedule request.
+
+        - Performs the slot swap.
+        - Fires Zoom meeting creation for the new slot.
+        - Sends the student an email notification.
+
+        **Permissions:** Admin only.
+
+        **400 cases:**
+        - `"Only pending requests can be accepted."` — request is already accepted/declined/cancelled.
+        - `"The requested slot is no longer available."` — another booking took the slot between the request and acceptance.
+      summary: Accept a reschedule request
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Consultations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RescheduleRequest'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptError400'
+          description: Request is not pending, or the requested slot was booked by
+            someone else.
+  /reschedule-requests/{id}/cancel/:
+    post:
+      operationId: reschedule_requests_cancel_create
+      description: Student cancels their own pending reschedule request.
+      summary: Cancel a reschedule request
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Consultations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RescheduleRequest'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelError400'
+          description: Request is not pending.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelError403'
+          description: Not your request.
+  /reschedule-requests/{id}/decline/:
+    post:
+      operationId: reschedule_requests_decline_create
+      description: |-
+        Admin declines the student's reschedule request. No slot swap occurs.
+
+        The student is notified by email.
+
+        **Permissions:** Admin only.
+      summary: Decline a reschedule request
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Consultations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RescheduleRequest'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeclineError400'
+          description: Request is not pending.
   /scholarships/:
     get:
       operationId: scholarships_list
@@ -9111,6 +9803,13 @@ paths:
           description: ''
 components:
   schemas:
+    AcceptError400:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+      - error
     Activation:
       type: object
       properties:
@@ -9478,12 +10177,14 @@ components:
           description: Max file size in MB
         lesson:
           type: integer
+          readOnly: true
       required:
       - allowed_file_types
       - description
       - due_date
       - id
       - instructions
+      - lesson
       - max_file_size
     AssignmentSubmission:
       type: object
@@ -10030,6 +10731,20 @@ components:
       - id
       - price
       - title
+    CancelError400:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+      - error
+    CancelError403:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+      - error
     Cart:
       type: object
       properties:
@@ -10722,6 +11437,13 @@ components:
       - password
       - re_password
       - role
+    DeclineError400:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+      - error
     DirectPurchase:
       type: object
       description: For buying a course, bundle, or digital book directly.
@@ -11736,6 +12458,23 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Option'
+    PaginatedPostList:
+      type: object
+      properties:
+        count:
+          type: integer
+        total_pages:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Post'
     PaginatedPublicBlogList:
       type: object
       properties:
@@ -11838,6 +12577,40 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RecurringAvailability'
+    PaginatedReplyList:
+      type: object
+      properties:
+        count:
+          type: integer
+        total_pages:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reply'
+    PaginatedRescheduleRequestList:
+      type: object
+      properties:
+        count:
+          type: integer
+        total_pages:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RescheduleRequest'
     PaginatedReviewList:
       type: object
       properties:
@@ -12199,6 +12972,7 @@ components:
           description: Max file size in MB
         lesson:
           type: integer
+          readOnly: true
     PatchedAssignmentSubmissionReview:
       type: object
       properties:
@@ -12877,6 +13651,49 @@ components:
           type: boolean
         question:
           type: integer
+    PatchedPost:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        course:
+          type: integer
+          readOnly: true
+        author:
+          type: integer
+          readOnly: true
+        author_name:
+          type: string
+          readOnly: true
+        author_role:
+          type: string
+          readOnly: true
+        author_avatar:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        body:
+          type: string
+        is_pinned:
+          type: boolean
+          readOnly: true
+        is_closed:
+          type: boolean
+          readOnly: true
+        reply_count:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedQuestion:
       type: object
       properties:
@@ -12964,6 +13781,43 @@ components:
           format: date
           nullable: true
           description: Last date this rule applies (leave blank for ongoing)
+    PatchedReply:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        post:
+          type: integer
+          readOnly: true
+        author:
+          type: integer
+          readOnly: true
+        author_name:
+          type: string
+          readOnly: true
+        author_role:
+          type: string
+          readOnly: true
+        author_avatar:
+          type: string
+          readOnly: true
+        body:
+          type: string
+        parent:
+          type: integer
+          nullable: true
+        children:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedReview:
       type: object
       properties:
@@ -13286,6 +14140,125 @@ components:
         * `pending` - Pending
         * `completed` - Completed
         * `failed` - Failed
+    Post:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        course:
+          type: integer
+          readOnly: true
+        author:
+          type: integer
+          readOnly: true
+        author_name:
+          type: string
+          readOnly: true
+        author_role:
+          type: string
+          readOnly: true
+        author_avatar:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        body:
+          type: string
+        is_pinned:
+          type: boolean
+          readOnly: true
+        is_closed:
+          type: boolean
+          readOnly: true
+        reply_count:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - author
+      - author_avatar
+      - author_name
+      - author_role
+      - body
+      - course
+      - created_at
+      - id
+      - is_closed
+      - is_pinned
+      - reply_count
+      - title
+      - updated_at
+    PostDetail:
+      type: object
+      description: Post with full replies (used in retrieve).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        course:
+          type: integer
+          readOnly: true
+        author:
+          type: integer
+          readOnly: true
+        author_name:
+          type: string
+          readOnly: true
+        author_role:
+          type: string
+          readOnly: true
+        author_avatar:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        body:
+          type: string
+        is_pinned:
+          type: boolean
+          readOnly: true
+        is_closed:
+          type: boolean
+          readOnly: true
+        reply_count:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        replies:
+          type: string
+          readOnly: true
+      required:
+      - author
+      - author_avatar
+      - author_name
+      - author_role
+      - body
+      - course
+      - created_at
+      - id
+      - is_closed
+      - is_pinned
+      - replies
+      - reply_count
+      - title
+      - updated_at
     PublicBlog:
       type: object
       description: Public serializer — no internal fields.
@@ -13541,6 +14514,8 @@ components:
       - course_purchase
       - bundle_purchase
       - consultation_purchase
+      - consultation_reschedule_accepted
+      - consultation_reschedule_declined
       - book_purchase
       - blog_approved
       - blog_rejected
@@ -13555,6 +14530,8 @@ components:
         * `course_purchase` - Course Purchase Confirmation
         * `bundle_purchase` - Bundle Purchase Confirmation
         * `consultation_purchase` - Consultation Purchase Confirmation
+        * `consultation_reschedule_accepted` - Consultation Reschedule Accepted
+        * `consultation_reschedule_declined` - Consultation Reschedule Declined
         * `book_purchase` - Book Purchase Confirmation
         * `blog_approved` - Blog Post Approved
         * `blog_rejected` - Blog Post Rejected
@@ -13780,6 +14757,135 @@ components:
       properties:
         rejection_note:
           type: string
+    Reply:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        post:
+          type: integer
+          readOnly: true
+        author:
+          type: integer
+          readOnly: true
+        author_name:
+          type: string
+          readOnly: true
+        author_role:
+          type: string
+          readOnly: true
+        author_avatar:
+          type: string
+          readOnly: true
+        body:
+          type: string
+        parent:
+          type: integer
+          nullable: true
+        children:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - author
+      - author_avatar
+      - author_name
+      - author_role
+      - body
+      - children
+      - created_at
+      - id
+      - post
+      - updated_at
+    RequestRescheduleError400:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+      - error
+    RescheduleRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        purchase:
+          type: integer
+        old_slot:
+          type: integer
+        old_slot_time:
+          type: string
+          format: date-time
+          readOnly: true
+        requested_slot:
+          type: integer
+        requested_slot_time:
+          type: string
+          format: date-time
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/RescheduleRequestStatusEnum'
+          readOnly: true
+        reason:
+          type: string
+          nullable: true
+        student_email:
+          type: string
+          format: email
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - old_slot
+      - old_slot_time
+      - purchase
+      - requested_slot
+      - requested_slot_time
+      - status
+      - student_email
+      - updated_at
+    RescheduleRequestInput:
+      type: object
+      properties:
+        old_slot_id:
+          type: integer
+        new_slot_id:
+          type: integer
+        reason:
+          type: string
+      required:
+      - new_slot_id
+      - old_slot_id
+    RescheduleRequestStatusEnum:
+      enum:
+      - pending
+      - accepted
+      - declined
+      - cancelled
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `accepted` - Accepted
+        * `declined` - Declined
+        * `cancelled` - Cancelled
     Review:
       type: object
       properties:

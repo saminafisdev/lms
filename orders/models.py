@@ -2,12 +2,10 @@ from django.db import models
 
 from accounts.models import User
 from books.models import Book
-from courses.models import Course
+from courses.models import Bundle, Course
 
 
 class Cart(models.Model):
-    """Only used for physical books."""
-
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="cart")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -15,24 +13,63 @@ class Cart(models.Model):
     def get_total(self):
         return sum(item.get_total_price() for item in self.items.all())
 
+    def has_physical_items(self):
+        return self.items.filter(item_type=CartItem.ItemType.PHYSICAL_BOOK).exists()
+
     def __str__(self):
         return f"Cart of {self.user.email}"
 
 
 class CartItem(models.Model):
+    class ItemType(models.TextChoices):
+        COURSE = "course", "Course"
+        BUNDLE = "bundle", "Bundle"
+        DIGITAL_BOOK = "digital_book", "Digital Book"
+        PHYSICAL_BOOK = "physical_book", "Physical Book"
+
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name="items")
-    book = models.ForeignKey(Book, on_delete=models.CASCADE)
-    quantity = models.PositiveIntegerField(default=1)
+    item_type = models.CharField(max_length=15, choices=ItemType.choices)
+
+    # Only one will be set per item
+    course = models.ForeignKey(Course, null=True, blank=True, on_delete=models.CASCADE)
+    bundle = models.ForeignKey(Bundle, null=True, blank=True, on_delete=models.CASCADE)
+    book = models.ForeignKey(Book, null=True, blank=True, on_delete=models.CASCADE)
+
+    quantity = models.PositiveIntegerField(default=1)  # only relevant for physical books
     added_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        unique_together = ("cart", "book")
-
     def get_total_price(self):
-        return self.book.physical_price * self.quantity
+        if self.item_type == self.ItemType.COURSE:
+            return self.course.price * self.quantity
+        elif self.item_type == self.ItemType.BUNDLE:
+            return self.bundle.price * self.quantity
+        elif self.item_type == self.ItemType.DIGITAL_BOOK:
+            return self.book.digital_price * self.quantity
+        elif self.item_type == self.ItemType.PHYSICAL_BOOK:
+            return self.book.physical_price * self.quantity
+        return 0
+
+    def get_unit_price(self):
+        if self.item_type == self.ItemType.COURSE:
+            return self.course.price
+        elif self.item_type == self.ItemType.BUNDLE:
+            return self.bundle.price
+        elif self.item_type == self.ItemType.DIGITAL_BOOK:
+            return self.book.digital_price
+        elif self.item_type == self.ItemType.PHYSICAL_BOOK:
+            return self.book.physical_price
+        return 0
+
+    def get_display_name(self):
+        if self.item_type == self.ItemType.COURSE:
+            return self.course.title
+        elif self.item_type == self.ItemType.BUNDLE:
+            return self.bundle.name
+        else:
+            return self.book.title
 
     def __str__(self):
-        return f"{self.quantity}x {self.book.title} in cart of {self.cart.user.email}"
+        return f"{self.item_type} item in cart of {self.cart.user.email}"
 
 
 class Order(models.Model):

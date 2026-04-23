@@ -5,11 +5,14 @@ info:
 
 http:
   method: GET
-  url: "{{base_url}}/courses/:course_pk/modules/:module_pk/lessons/"
+  url: "{{base_url}}/courses/:course_pk/modules/:module_pk/lessons/:id/video/"
   headers:
     - name: Authorization
       value: JWT {{access_token}}
   params:
+    - name: id
+      value: "22"
+      type: path
     - name: module_pk
       value: "1"
       type: path

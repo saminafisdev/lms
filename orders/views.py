@@ -22,8 +22,9 @@ from orders.stripe import construct_webhook_event, create_checkout_session, crea
 
 from .models import Cart, CartItem, Order, OrderItem
 from .serializers import (
+    AddToCartSerializer,
     CartCheckoutSerializer,
-    CartItemSerializer,
+    CartItemReadSerializer,
     CartSerializer,
     DirectPurchaseSerializer,
     OrderSerializer,
@@ -32,7 +33,7 @@ from .utils import already_owns
 
 
 class CartViewSet(viewsets.ViewSet):
-    """Cart management — physical books only."""
+    """Unified cart — supports courses, bundles, digital books, and physical books."""
 
     permission_classes = [permissions.IsAuthenticated]
 
@@ -47,34 +48,52 @@ class CartViewSet(viewsets.ViewSet):
         serializer = CartSerializer(cart, context={"request": request})
         return Response(serializer.data)
 
-    @extend_schema(request=CartItemSerializer, responses={201: CartItemSerializer})
+    @extend_schema(request=AddToCartSerializer, responses={201: CartItemReadSerializer})
     def create(self, request):
-        """POST /cart/items/ — add item to cart."""
+        """POST /cart/items/ — add any product to cart."""
         cart = self.get_or_create_cart(request.user)
-        serializer = CartItemSerializer(data=request.data, context={"request": request})
+        serializer = AddToCartSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
 
-        book = serializer.validated_data["book"]
+        item_type = serializer.validated_data["item_type"]
+        obj = serializer.validated_data["object"]
+        quantity = serializer.validated_data.get("quantity", 1)
 
-        # Block if already owns physical copy
-        if already_owns(request.user, book, format="physical"):
-            return Response(
-                {"error": "You already own the physical version of this book."},
-                status=status.HTTP_400_BAD_REQUEST,
+        course = obj if item_type == CartItem.ItemType.COURSE else None
+        bundle = obj if item_type == CartItem.ItemType.BUNDLE else None
+        book = obj if item_type in (CartItem.ItemType.DIGITAL_BOOK, CartItem.ItemType.PHYSICAL_BOOK) else None
+
+        # Enforce one item per product per type in cart
+        existing = CartItem.objects.filter(
+            cart=cart,
+            item_type=item_type,
+            course=course,
+            bundle=bundle,
+            book=book,
+        ).first()
+
+        if existing:
+            if item_type == CartItem.ItemType.PHYSICAL_BOOK:
+                existing.quantity += quantity
+                existing.save(update_fields=["quantity"])
+                item = existing
+            else:
+                return Response(
+                    {"error": "This item is already in your cart."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            item = CartItem.objects.create(
+                cart=cart,
+                item_type=item_type,
+                course=course,
+                bundle=bundle,
+                book=book,
+                quantity=quantity,
             )
 
-        # Update quantity if already in cart, else create
-        cart_item, created = CartItem.objects.get_or_create(
-            cart=cart,
-            book=book,
-            defaults={"quantity": serializer.validated_data.get("quantity", 1)},
-        )
-        if not created:
-            cart_item.quantity += serializer.validated_data.get("quantity", 1)
-            cart_item.save()
-
         return Response(
-            CartItemSerializer(cart_item, context={"request": request}).data,
+            CartItemReadSerializer(item, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -91,15 +110,24 @@ class CartViewSet(viewsets.ViewSet):
                 {"error": "Item not found in cart."}, status=status.HTTP_404_NOT_FOUND
             )
 
-    @extend_schema(request=CartItemSerializer, responses={200: CartItemSerializer})
+    @extend_schema(
+        request=AddToCartSerializer,
+        responses={200: CartItemReadSerializer},
+    )
     def partial_update(self, request, pk=None):
-        """PATCH /cart/items/{id}/ — update quantity."""
+        """PATCH /cart/items/{id}/ — update quantity (physical books only)."""
         cart = self.get_or_create_cart(request.user)
         try:
             item = CartItem.objects.get(id=pk, cart=cart)
         except CartItem.DoesNotExist:
             return Response(
                 {"error": "Item not found in cart."}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        if item.item_type != CartItem.ItemType.PHYSICAL_BOOK:
+            return Response(
+                {"error": "Quantity can only be updated for physical books."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         quantity = request.data.get("quantity")
@@ -115,8 +143,8 @@ class CartViewSet(viewsets.ViewSet):
             )
 
         item.quantity = int(quantity)
-        item.save()
-        return Response(CartItemSerializer(item, context={"request": request}).data)
+        item.save(update_fields=["quantity"])
+        return Response(CartItemReadSerializer(item, context={"request": request}).data)
 
     @extend_schema(responses={204: None})
     @action(detail=False, methods=["delete"], url_path="clear")
@@ -178,9 +206,9 @@ class OrderViewSet(viewsets.ViewSet):
         except Order.DoesNotExist:
             return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if order.order_type != Order.OrderType.CART:
+        if order.fulfillment_status == Order.FulfillmentStatus.NOT_APPLICABLE:
             return Response(
-                {"error": "Fulfillment status only applies to physical book orders."},
+                {"error": "This order has no physical items requiring fulfillment tracking."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -269,7 +297,8 @@ class OrderViewSet(viewsets.ViewSet):
     def checkout(self, request):
         """
         POST /orders/checkout/
-        Checkout physical books from cart.
+        Checkout the full cart — courses, bundles, digital books, and physical books.
+        shipping_address is required only when the cart contains physical books.
         """
         serializer = CartCheckoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -280,49 +309,84 @@ class OrderViewSet(viewsets.ViewSet):
                 {"error": "Your cart is empty."}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Validate stock for all items before creating order
-        for item in cart.items.all():
-            if item.quantity > item.book.stock_count:
-                return Response(
-                    {
-                        "error": f"'{item.book.title}' only has {item.book.stock_count} copies left."
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        items = list(cart.items.select_related("course", "bundle", "book").all())
+        has_physical = any(i.item_type == CartItem.ItemType.PHYSICAL_BOOK for i in items)
+
+        if has_physical and not serializer.validated_data.get("shipping_address"):
+            return Response(
+                {"error": "shipping_address is required for orders containing physical books."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate stock for physical items
+        for item in items:
+            if item.item_type == CartItem.ItemType.PHYSICAL_BOOK:
+                if item.quantity > item.book.stock_count:
+                    return Response(
+                        {
+                            "error": f"'{item.book.title}' only has {item.book.stock_count} copies left."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
         total = cart.get_total()
+        fulfillment_status = (
+            Order.FulfillmentStatus.PROCESSING
+            if has_physical
+            else Order.FulfillmentStatus.NOT_APPLICABLE
+        )
         order = Order.objects.create(
             user=request.user,
             order_type=Order.OrderType.CART,
             status=Order.PaymentStatus.PENDING,
             total_amount=total,
+            fulfillment_status=fulfillment_status,
         )
 
-        # Save shipping address
-        ShippingAddress.objects.create(
-            order=order, **serializer.validated_data["shipping_address"]
-        )
-
-        for item in cart.items.all():
-            OrderItem.objects.create(
-                order=order,
-                item_type="physical_book",
-                book=item.book,
-                quantity=item.quantity,
-                unit_price=item.book.physical_price,
-                total_price=item.get_total_price(),
+        if has_physical:
+            ShippingAddress.objects.create(
+                order=order, **serializer.validated_data["shipping_address"]
             )
 
-        # Create Stripe Checkout Session
-        session = create_checkout_session(
-            line_items=[{
+        stripe_line_items = []
+        for item in items:
+            unit_price = item.get_unit_price()
+            total_price = item.get_total_price()
+            course = item.course if item.item_type == CartItem.ItemType.COURSE else None
+            bundle = item.bundle if item.item_type == CartItem.ItemType.BUNDLE else None
+            book = item.book if item.item_type in (CartItem.ItemType.DIGITAL_BOOK, CartItem.ItemType.PHYSICAL_BOOK) else None
+
+            OrderItem.objects.create(
+                order=order,
+                item_type=item.item_type,
+                course=course,
+                bundle=bundle,
+                book=book,
+                quantity=item.quantity,
+                unit_price=unit_price,
+                total_price=total_price,
+            )
+            stripe_line_items.append({
                 "price_data": {
                     "currency": settings.CURRENCY,
-                    "unit_amount": int(total * 100),
-                    "product_data": {"name": "Cart Checkout"},
+                    "unit_amount": int(unit_price * 100),
+                    "product_data": {"name": item.get_display_name()},
                 },
-                "quantity": 1,
-            }],
+                "quantity": item.quantity,
+            })
+
+        # Free cart (e.g. 100% scholarship applied prior) — skip Stripe
+        if total == 0:
+            order.status = Order.PaymentStatus.COMPLETED
+            order.save(update_fields=["status"])
+            self._fulfill_order(order)
+            return Response(
+                {"order": OrderSerializer(order).data},
+                status=status.HTTP_201_CREATED,
+            )
+
+        session = create_checkout_session(
+            line_items=stripe_line_items,
             success_url=f"{settings.FRONTEND_URL}/order-complete?order_id={order.id}",
             cancel_url=f"{settings.FRONTEND_URL}/cart?cancelled=true",
             metadata={"order_id": order.id, "user_id": request.user.id},
@@ -675,26 +739,31 @@ class StripeWebhookView(APIView):
                     )
 
             if order.order_type == Order.OrderType.CART:
-                order.fulfillment_status = Order.FulfillmentStatus.PROCESSING
-                order.save(update_fields=["fulfillment_status"])
-                Cart.objects.filter(user=order.user).first().items.all().delete()
-                send_email_task.delay(
-                    to_email=order.user.email,
-                    purpose="book_purchase",
-                    template_data={
-                        "first_name": order.user.first_name or "there",
-                        "book_title": ", ".join(
-                            item.book.title for item in order.items.all()
-                        ),
-                        "format": "Physical",
-                        "amount": str(order.total_amount),
-                    },
-                )
-                logger.info(
-                    "Queued physical book_purchase email to %s for order %s",
-                    order.user.email,
-                    order.id,
-                )
+                # Clear cart after fulfillment
+                cart = Cart.objects.filter(user=order.user).first()
+                if cart:
+                    cart.items.all().delete()
+
+                # Send shipping notification only for physical items
+                physical_items = [
+                    i for i in order.items.all() if i.item_type == "physical_book"
+                ]
+                if physical_items:
+                    send_email_task.delay(
+                        to_email=order.user.email,
+                        purpose="book_purchase",
+                        template_data={
+                            "first_name": order.user.first_name or "there",
+                            "book_title": ", ".join(i.book.title for i in physical_items),
+                            "format": "Physical",
+                            "amount": str(order.total_amount),
+                        },
+                    )
+                    logger.info(
+                        "Queued physical book_purchase email to %s for order %s",
+                        order.user.email,
+                        order.id,
+                    )
 
 
 class BookSalesViewSet(viewsets.ViewSet):

@@ -5,7 +5,7 @@ info:
 
 http:
   method: PUT
-  url: https://video.bunnycdn.com/library/635468/videos/d5d420c3-f5db-47eb-9b95-ee09674b70cf
+  url: https://video.bunnycdn.com/library/635468/videos/7883e503-27e4-4461-8b70-dd93e9819830
   headers:
     - name: AccessKey
       value: dc42ac07-1347-4947-934f3d74691a-1aaf-43ce
@@ -14,8 +14,8 @@ http:
   body:
     type: file
     data:
-      - filePath: /home/nafis/Downloads/13227290_640_360_60fps.mp4
-        contentType: video/mp4
+      - filePath: /home/nafis/Downloads/262189.mov
+        contentType: video/quicktime
         selected: true
   auth: inherit
 
