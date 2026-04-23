@@ -73,3 +73,72 @@ def sync_newsletter_contact_task(self, email, action, first_name="", last_name="
         logger.error(f"Newsletter sync failed for {email} ({action}): {exc}")
         raise self.retry(exc=exc)
 
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=120)
+def create_lulu_print_job_task(self, order_item_id):
+    """
+    Create a Lulu print job for a physical book OrderItem after payment.
+    Saves the returned print_job_id back to the OrderItem.
+    """
+    try:
+        from orders.models import OrderItem
+        from orders.lulu import create_print_job
+
+        item = OrderItem.objects.select_related(
+            "order__user", "order__shipping_address", "book"
+        ).get(id=order_item_id)
+
+        book = item.book
+        order = item.order
+        address = order.shipping_address
+
+        if not book.lulu_pod_package_id:
+            logger.warning(
+                "Book %s has no lulu_pod_package_id — skipping Lulu print job for OrderItem %s",
+                book.id,
+                item.id,
+            )
+            return None
+
+        if not book.interior_pdf_url:
+            logger.warning(
+                "Book %s has no interior_pdf_url — skipping Lulu print job for OrderItem %s",
+                book.id,
+                item.id,
+            )
+            return None
+
+        shipping = {
+            "name": address.full_name,
+            "street1": address.address_line,
+            "city": address.city,
+            "country_code": address.country,
+            "postcode": address.postal_code or "",
+            "phone_number": address.phone,
+            "email": order.user.email,
+        }
+
+        result = create_print_job(
+            title=book.title,
+            interior_pdf_url=book.interior_pdf_url,
+            cover_image_url=book.cover_image.url if book.cover_image else "",
+            pod_package_id=book.lulu_pod_package_id,
+            quantity=item.quantity,
+            contact_email=order.user.email,
+            shipping_address=shipping,
+        )
+
+        item.lulu_print_job_id = str(result["id"])
+        item.save(update_fields=["lulu_print_job_id"])
+        logger.info(
+            "Lulu print job %s created for OrderItem %s (book: %s)",
+            result["id"],
+            item.id,
+            book.title,
+        )
+        return result["id"]
+
+    except Exception as exc:
+        logger.error("Lulu print job task failed for OrderItem %s: %s", order_item_id, exc)
+        raise self.retry(exc=exc)

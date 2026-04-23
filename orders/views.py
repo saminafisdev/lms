@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 from config.pagination import StandardPagination
 from config.permissions import IsAdminRole
 from courses.models import Enrollment
-from config.tasks import send_email_task, create_zoom_meeting_for_slot_task
+from config.tasks import send_email_task, create_zoom_meeting_for_slot_task, create_lulu_print_job_task
 from orders.models import ShippingAddress
 from orders.serializers import BookSaleSerializer, UpdateFulfillmentSerializer
 from orders.stripe import construct_webhook_event, create_checkout_session, create_payment_intent
@@ -681,6 +681,12 @@ class StripeWebhookView(APIView):
                 if item.item_type == "physical_book":
                     item.book.stock_count -= item.quantity
                     item.book.save(update_fields=["stock_count"])
+                    # Dispatch Lulu print job (prints & ships to customer)
+                    if item.book.lulu_pod_package_id and item.book.interior_pdf_url:
+                        try:
+                            create_lulu_print_job_task.delay(item.id)
+                        except Exception as e:
+                            logger.error("Failed to queue Lulu task for OrderItem %s: %s", item.id, e)
 
                 elif item.item_type == "digital_book":
                     send_email_task.delay(
@@ -764,6 +770,66 @@ class StripeWebhookView(APIView):
                         order.user.email,
                         order.id,
                     )
+
+
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class LuluWebhookView(APIView):
+    """
+    Lulu sends print job status updates here.
+    Maps Lulu statuses to our Order.fulfillment_status.
+    """
+
+    permission_classes = [permissions.AllowAny]
+
+    # Lulu status → our FulfillmentStatus
+    STATUS_MAP = {
+        "CREATED": Order.FulfillmentStatus.PROCESSING,
+        "UNPAID": Order.FulfillmentStatus.PROCESSING,
+        "PAYMENT_IN_PROGRESS": Order.FulfillmentStatus.PROCESSING,
+        "PRODUCTION_READY": Order.FulfillmentStatus.PROCESSING,
+        "IN_PRODUCTION": Order.FulfillmentStatus.PROCESSING,
+        "SHIPPED": Order.FulfillmentStatus.SHIPPED,
+        "DELIVERED": Order.FulfillmentStatus.DELIVERED,
+        "CANCELLED": Order.FulfillmentStatus.CANCELLED,
+        "ERROR": Order.FulfillmentStatus.CANCELLED,
+    }
+
+    def post(self, request):
+        try:
+            data = request.data
+            print_job_id = str(data.get("id", ""))
+            lulu_status = data.get("status", {})
+            if isinstance(lulu_status, dict):
+                lulu_status = lulu_status.get("name", "")
+
+            if not print_job_id or not lulu_status:
+                return Response({"error": "Missing id or status."}, status=status.HTTP_400_BAD_REQUEST)
+
+            our_status = self.STATUS_MAP.get(lulu_status.upper())
+            if not our_status:
+                return Response({"status": "ignored"})
+
+            item = OrderItem.objects.filter(lulu_print_job_id=print_job_id).select_related("order").first()
+            if not item:
+                logger.warning("LuluWebhook: no OrderItem found for print_job_id=%s", print_job_id)
+                return Response({"status": "ok"})
+
+            order = item.order
+            order.fulfillment_status = our_status
+            order.save(update_fields=["fulfillment_status"])
+            logger.info(
+                "LuluWebhook: order %s fulfillment_status → %s (lulu_status=%s)",
+                order.id,
+                our_status,
+                lulu_status,
+            )
+            return Response({"status": "ok"})
+
+        except Exception as e:
+            logger.error("LuluWebhook error: %s", e, exc_info=True)
+            return Response({"error": "Internal error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class BookSalesViewSet(viewsets.ViewSet):

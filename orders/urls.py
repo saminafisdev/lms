@@ -1,4 +1,4 @@
-from orders.views import BookSalesViewSet
+from orders.views import BookSalesViewSet, LuluWebhookView
 from orders.views import StripeWebhookView
 from django.urls import path
 from .views import CartViewSet, OrderViewSet
@@ -35,4 +35,6 @@ urlpatterns = [
     path("orders/book-sales/<int:pk>/", book_sales_detail, name="book-sales-detail"),
     # Stripe webhook
     path("orders/webhook/stripe/", StripeWebhookView.as_view(), name="stripe-webhook"),
+    # Lulu webhook
+    path("orders/webhook/lulu/", LuluWebhookView.as_view(), name="lulu-webhook"),
 ]

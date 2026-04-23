@@ -211,6 +211,10 @@ STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default="")
 CURRENCY = "usd"
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:5174")
 
+LULU_CLIENT_KEY = env("LULU_CLIENT_KEY", default="")
+LULU_CLIENT_SECRET = env("LULU_CLIENT_SECRET", default="")
+LULU_API_URL = env("LULU_API_URL", default="https://api.sandbox.lulu.com")
+
 ZOOM_ACCOUNT_ID = env("ZOOM_ACCOUNT_ID", default="")
 ZOOM_CLIENT_ID = env("ZOOM_CLIENT_ID", default="")
 ZOOM_CLIENT_SECRET = env("ZOOM_CLIENT_SECRET", default="")

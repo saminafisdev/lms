@@ -58,6 +58,16 @@ class Book(models.Model):
     has_physical = models.BooleanField(default=False)
     physical_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     stock_count = models.PositiveIntegerField(default=0)
+
+    # Lulu print-on-demand fields (only needed for physical books)
+    lulu_pod_package_id = models.CharField(
+        max_length=100, blank=True, null=True,
+        help_text="Lulu pod_package_id encoding paper size, binding, color. e.g. 0600X0900BWSTDSS060UW444MXX"
+    )
+    interior_pdf_url = models.URLField(
+        blank=True, null=True,
+        help_text="Publicly accessible URL of the print-ready interior PDF for Lulu."
+    )
     
     has_digital = models.BooleanField(default=False)
     digital_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
