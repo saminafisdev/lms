@@ -168,6 +168,13 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
             )
         return value.strip()
 
+    def validate_postal_code(self, value):
+        if value and len(value.strip()) < 4:
+            raise serializers.ValidationError(
+                "Enter a valid postal code (minimum 4 characters), or leave it blank."
+            )
+        return value.strip() if value else value
+
 
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
