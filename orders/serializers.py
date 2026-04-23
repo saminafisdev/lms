@@ -119,10 +119,6 @@ class AddToCartSerializer(serializers.Serializer):
                 )
             if obj.stock_count <= 0:
                 raise serializers.ValidationError({"object_id": "This book is out of stock."})
-            if already_owns(user, obj, format="physical"):
-                raise serializers.ValidationError(
-                    "You already own the physical version of this book."
-                )
             if quantity > obj.stock_count:
                 raise serializers.ValidationError(
                     {"quantity": f"Only {obj.stock_count} copies available."}
