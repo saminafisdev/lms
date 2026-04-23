@@ -115,10 +115,11 @@ def create_lulu_print_job_task(self, order_item_id):
             "street1": address.address_line,
             "city": address.city,
             "country_code": address.country,
-            "postcode": address.postal_code or "",
             "phone_number": address.phone,
             "email": order.user.email,
         }
+        if address.postal_code:
+            shipping["postcode"] = address.postal_code
 
         result = create_print_job(
             title=book.title,
