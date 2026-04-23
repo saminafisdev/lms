@@ -117,4 +117,6 @@ media/
 
 
 # Other stuff
-# .screenshots
+.screenshots
+api_endpoints.csv
+schema.yaml
