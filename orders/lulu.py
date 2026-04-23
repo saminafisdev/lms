@@ -127,7 +127,7 @@ def get_print_specs() -> list:
     Docs: https://developers.lulu.com/pages/docs/misc/pod-package-id
     """
     return [
-        # ── Paperback / Perfect Bind ─────────────────────────────────────────
+        # ── Paperback / Perfect Bind — Standard ─────────────────────────────
         {"id": "0600X0900BWSTDPB060UW444MXX", "description": "6×9\" B&W Standard Paperback (60# uncoated)"},
         {"id": "0600X0900FCSTDPB060UW444MXX", "description": "6×9\" Full Color Standard Paperback (60# uncoated)"},
         {"id": "0600X0900BWSTDPB080CW444MXX", "description": "6×9\" B&W Standard Paperback (80# coated white)"},
@@ -137,15 +137,24 @@ def get_print_specs() -> list:
         {"id": "0825X1075FCSTDPB060UW444MXX", "description": "8.25×10.75\" Full Color Standard Paperback (60# uncoated)"},
         {"id": "0850X1100BWSTDPB060UW444MXX", "description": "8.5×11\" B&W Standard Paperback (60# uncoated)"},
         {"id": "0850X1100FCSTDPB060UW444MXX", "description": "8.5×11\" Full Color Standard Paperback (60# uncoated)"},
-        # ── Hardcover / Case Laminate ────────────────────────────────────────
+        # ── Paperback / Perfect Bind — Premium (for high ink coverage PDFs) ──
+        {"id": "0600X0900FCPREPB060UW444MXX", "description": "6×9\" Full Color Premium Paperback (60# uncoated)"},
+        {"id": "0550X0850FCPREPB060UW444MXX", "description": "5.5×8.5\" Full Color Premium Paperback (60# uncoated)"},
+        {"id": "0825X1075FCPREPB060UW444MXX", "description": "8.25×10.75\" Full Color Premium Paperback (60# uncoated)"},
+        {"id": "0850X1100FCPREPB060UW444MXX", "description": "8.5×11\" Full Color Premium Paperback (60# uncoated)"},
+        # ── Hardcover / Case Laminate — Standard ────────────────────────────
         {"id": "0600X0900BWSTDHC060UW444MXX", "description": "6×9\" B&W Hardcover (60# uncoated)"},
         {"id": "0600X0900FCSTDHC060UW444MXX", "description": "6×9\" Full Color Hardcover (60# uncoated)"},
         {"id": "0550X0850BWSTDHC060UW444MXX", "description": "5.5×8.5\" B&W Hardcover (60# uncoated)"},
         {"id": "0550X0850FCSTDHC060UW444MXX", "description": "5.5×8.5\" Full Color Hardcover (60# uncoated)"},
         {"id": "0850X1100BWSTDHC060UW444MXX", "description": "8.5×11\" B&W Hardcover (60# uncoated)"},
         {"id": "0850X1100FCSTDHC060UW444MXX", "description": "8.5×11\" Full Color Hardcover (60# uncoated)"},
-        # ── Saddle Stitch (booklet / magazine ≤80 pages) ────────────────────
+        # ── Hardcover — Premium ──────────────────────────────────────────────
+        {"id": "0600X0900FCPREHC060UW444MXX", "description": "6×9\" Full Color Premium Hardcover (60# uncoated)"},
+        {"id": "0850X1100FCPREHC060UW444MXX", "description": "8.5×11\" Full Color Premium Hardcover (60# uncoated)"},
+        # ── Saddle Stitch (booklet / magazine, 2–80 pages) ──────────────────
         {"id": "0600X0900BWSTDSS060UW444MXX", "description": "6×9\" B&W Saddle Stitch (60# uncoated)"},
         {"id": "0850X1100BWSTDSS060UW444MXX", "description": "8.5×11\" B&W Saddle Stitch (60# uncoated)"},
         {"id": "0850X1100FCSTDSS060UW444MXX", "description": "8.5×11\" Full Color Saddle Stitch (60# uncoated)"},
+        {"id": "0850X1100FCPRESS060UW444MXX",  "description": "8.5×11\" Full Color Premium Saddle Stitch (60# uncoated)"},
     ]
