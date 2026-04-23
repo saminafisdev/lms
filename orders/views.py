@@ -793,6 +793,7 @@ class LuluWebhookView(APIView):
         "SHIPPED": Order.FulfillmentStatus.SHIPPED,
         "DELIVERED": Order.FulfillmentStatus.DELIVERED,
         "CANCELLED": Order.FulfillmentStatus.CANCELLED,
+        "REJECTED": Order.FulfillmentStatus.CANCELLED,
         "ERROR": Order.FulfillmentStatus.CANCELLED,
     }
 
@@ -811,7 +812,7 @@ class LuluWebhookView(APIView):
             if not our_status:
                 return Response({"status": "ignored"})
 
-            item = OrderItem.objects.filter(lulu_print_job_id=print_job_id).select_related("order").first()
+            item = OrderItem.objects.filter(lulu_print_job_id=print_job_id).select_related("order__user", "book").first()
             if not item:
                 logger.warning("LuluWebhook: no OrderItem found for print_job_id=%s", print_job_id)
                 return Response({"status": "ok"})
@@ -825,11 +826,50 @@ class LuluWebhookView(APIView):
                 our_status,
                 lulu_status,
             )
+
+            # Alert admin on rejection
+            if lulu_status.upper() in ("REJECTED", "ERROR", "CANCELLED"):
+                self._alert_admin(data, item, lulu_status)
+
             return Response({"status": "ok"})
 
         except Exception as e:
             logger.error("LuluWebhook error: %s", e, exc_info=True)
             return Response({"error": "Internal error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _alert_admin(self, data, item, lulu_status):
+        from django.conf import settings as django_settings
+        from email_templates.sendgrid import send_plain_email
+
+        admin_email = django_settings.ADMIN_EMAIL
+        if not admin_email:
+            logger.warning("LuluWebhook: ADMIN_EMAIL not set, skipping rejection alert.")
+            return
+
+        order = item.order
+        book_title = item.book.title if item.book else "Unknown"
+        line_items = data.get("line_items", [])
+        rejection_details = []
+        for li in line_items:
+            normalization = li.get("printable_normalization") or li.get("tracking", {})
+            if normalization:
+                rejection_details.append(str(normalization))
+
+        reason = "\n".join(rejection_details) if rejection_details else "No details provided by Lulu."
+
+        subject = f"⚠️ Lulu Print Job {lulu_status} — Order #{order.id}"
+        body = (
+            f"A Lulu print job was {lulu_status} for Order #{order.id}.\n\n"
+            f"Book: {book_title}\n"
+            f"Customer: {order.user.email}\n"
+            f"Lulu Print Job ID: {item.lulu_print_job_id}\n\n"
+            f"Rejection reason:\n{reason}\n\n"
+            f"Review it at: https://developers.sandbox.lulu.com/print-jobs/{item.lulu_print_job_id}"
+        )
+        try:
+            send_plain_email(admin_email, subject, body)
+        except Exception as e:
+            logger.error("LuluWebhook: failed to send admin alert email: %s", e)
 
 
 class BookSalesViewSet(viewsets.ViewSet):

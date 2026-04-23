@@ -175,6 +175,7 @@ if USE_BUNNY_STORAGE:
 # ---------------------------------------------------------------------------
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="noreply@zahraahassane.com")
 DEFAULT_FROM_NAME = env("DEFAULT_FROM_NAME", default="Zahra LMS")
+ADMIN_EMAIL = env("ADMIN_EMAIL", default="")
 
 # ---------------------------------------------------------------------------
 # Redis & Celery
