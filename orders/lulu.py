@@ -135,12 +135,15 @@ def get_print_specs() -> list:
         {"id": "0550X0850FCSTDPB060UW444MXX", "description": "5.5×8.5\" Full Color Standard Paperback (60# uncoated)"},
         {"id": "0825X1075BWSTDPB060UW444MXX", "description": "8.25×10.75\" B&W Standard Paperback (60# uncoated)"},
         {"id": "0825X1075FCSTDPB060UW444MXX", "description": "8.25×10.75\" Full Color Standard Paperback (60# uncoated)"},
+        {"id": "0827X1169BWSTDPB060UW444MXX", "description": "A4 (8.27×11.69\") B&W Standard Paperback (60# uncoated)"},
+        {"id": "0827X1169FCSTDPB060UW444MXX", "description": "A4 (8.27×11.69\") Full Color Standard Paperback (60# uncoated)"},
         {"id": "0850X1100BWSTDPB060UW444MXX", "description": "8.5×11\" B&W Standard Paperback (60# uncoated)"},
         {"id": "0850X1100FCSTDPB060UW444MXX", "description": "8.5×11\" Full Color Standard Paperback (60# uncoated)"},
         # ── Paperback / Perfect Bind — Premium (for high ink coverage PDFs) ──
         {"id": "0600X0900FCPREPB060UW444MXX", "description": "6×9\" Full Color Premium Paperback (60# uncoated)"},
         {"id": "0550X0850FCPREPB060UW444MXX", "description": "5.5×8.5\" Full Color Premium Paperback (60# uncoated)"},
         {"id": "0825X1075FCPREPB060UW444MXX", "description": "8.25×10.75\" Full Color Premium Paperback (60# uncoated)"},
+        {"id": "0827X1169FCPREPB060UW444MXX", "description": "A4 (8.27×11.69\") Full Color Premium Paperback (60# uncoated)"},
         {"id": "0850X1100FCPREPB060UW444MXX", "description": "8.5×11\" Full Color Premium Paperback (60# uncoated)"},
         # ── Hardcover / Case Laminate — Standard ────────────────────────────
         {"id": "0600X0900BWSTDHC060UW444MXX", "description": "6×9\" B&W Hardcover (60# uncoated)"},
