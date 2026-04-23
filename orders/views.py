@@ -682,7 +682,7 @@ class StripeWebhookView(APIView):
                     item.book.stock_count -= item.quantity
                     item.book.save(update_fields=["stock_count"])
                     # Dispatch Lulu print job (prints & ships to customer)
-                    if item.book.lulu_pod_package_id and item.book.interior_pdf_url:
+                    if item.book.lulu_pod_package_id and item.book.digital_file:
                         try:
                             create_lulu_print_job_task.delay(item.id)
                         except Exception as e:

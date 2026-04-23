@@ -1,9 +1,11 @@
 from django.contrib import admin
 from .models import Book, BookCategory, BookGalleryImage
 
+
 class BookGalleryImageInline(admin.TabularInline):
     model = BookGalleryImage
     extra = 1
+
 
 @admin.register(BookCategory)
 class BookCategoryAdmin(admin.ModelAdmin):
@@ -11,11 +13,12 @@ class BookCategoryAdmin(admin.ModelAdmin):
     prepopulated_fields = {"slug": ("name",)}
     search_fields = ("name",)
 
+
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
     list_display = (
-        "title", "author", "has_physical", "physical_price", 
-        "has_digital", "digital_price", "is_visible"
+        "title", "author", "has_physical", "physical_price",
+        "has_digital", "digital_price", "lulu_pod_package_id", "is_visible"
     )
     list_filter = ("is_visible", "has_physical", "has_digital", "category")
     search_fields = ("title", "author", "isbn", "description")
@@ -34,6 +37,15 @@ class BookAdmin(admin.ModelAdmin):
         ("Physical Version", {
             "fields": ("has_physical", "physical_price", "stock_count")
         }),
+        ("Lulu Print-on-Demand", {
+            "fields": ("lulu_pod_package_id",),
+            "description": (
+                "Set this to enable automatic printing and international shipping via Lulu. "
+                "The interior PDF is taken from the uploaded digital_file. "
+                "pod_package_id encodes paper size, binding, and color — "
+                "e.g. 0600X0900BWSTDSS060UW444MXX = 6x9 B&W perfect-bound paperback."
+            ),
+        }),
         ("Digital Version", {
             "fields": ("has_digital", "digital_price", "digital_file")
         }),
@@ -41,6 +53,7 @@ class BookAdmin(admin.ModelAdmin):
             "fields": ("is_visible",)
         }),
     )
+
 
 @admin.register(BookGalleryImage)
 class BookGalleryImageAdmin(admin.ModelAdmin):

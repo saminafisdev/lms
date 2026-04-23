@@ -47,7 +47,6 @@ class AdminBookSerializer(SlugMixin, serializers.ModelSerializer):
             "physical_price",
             "stock_count",
             "lulu_pod_package_id",
-            "interior_pdf_url",
             "has_digital",
             "digital_price",
             "tags",

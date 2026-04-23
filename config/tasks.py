@@ -79,6 +79,7 @@ def sync_newsletter_contact_task(self, email, action, first_name="", last_name="
 def create_lulu_print_job_task(self, order_item_id):
     """
     Create a Lulu print job for a physical book OrderItem after payment.
+    Uses the book's digital_file URL as the interior PDF for Lulu.
     Saves the returned print_job_id back to the OrderItem.
     """
     try:
@@ -96,18 +97,18 @@ def create_lulu_print_job_task(self, order_item_id):
         if not book.lulu_pod_package_id:
             logger.warning(
                 "Book %s has no lulu_pod_package_id — skipping Lulu print job for OrderItem %s",
-                book.id,
-                item.id,
+                book.id, item.id,
             )
             return None
 
-        if not book.interior_pdf_url:
+        if not book.digital_file:
             logger.warning(
-                "Book %s has no interior_pdf_url — skipping Lulu print job for OrderItem %s",
-                book.id,
-                item.id,
+                "Book %s has no digital_file (interior PDF) — skipping Lulu print job for OrderItem %s",
+                book.id, item.id,
             )
             return None
+
+        interior_pdf_url = book.digital_file.url
 
         shipping = {
             "name": address.full_name,
@@ -121,7 +122,7 @@ def create_lulu_print_job_task(self, order_item_id):
 
         result = create_print_job(
             title=book.title,
-            interior_pdf_url=book.interior_pdf_url,
+            interior_pdf_url=interior_pdf_url,
             cover_image_url=book.cover_image.url if book.cover_image else "",
             pod_package_id=book.lulu_pod_package_id,
             quantity=item.quantity,
@@ -133,9 +134,7 @@ def create_lulu_print_job_task(self, order_item_id):
         item.save(update_fields=["lulu_print_job_id"])
         logger.info(
             "Lulu print job %s created for OrderItem %s (book: %s)",
-            result["id"],
-            item.id,
-            book.title,
+            result["id"], item.id, book.title,
         )
         return result["id"]
 
