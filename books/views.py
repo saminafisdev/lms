@@ -240,18 +240,11 @@ class BookViewSet(viewsets.ModelViewSet):
     def lulu_packages(self, request):
         """
         GET /books/lulu-packages/
-        Returns all available Lulu pod_package_id options with descriptions.
+        Returns common Lulu pod_package_id options with human-readable descriptions.
         Admin only.
         """
-        try:
-            from orders.lulu import get_print_specs
-            data = get_print_specs()
-            return Response(data)
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to fetch Lulu specifications: {str(e)}"},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+        from orders.lulu import get_print_specs
+        return Response(get_print_specs())
 
 
 class BookGalleryImageViewSet(viewsets.ModelViewSet):

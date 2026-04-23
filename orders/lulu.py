@@ -118,11 +118,34 @@ def get_print_job(print_job_id: str) -> dict:
 
 def get_print_specs() -> list:
     """
-    Fetch all available pod_package_id options from Lulu.
-    Returns a list of dicts with id, description, and attributes
-    (trim size, paper type, color, binding, etc.).
+    Return a reference list of common Lulu pod_package_id codes.
+
+    Lulu does not expose an API endpoint for this — the id is a fixed-format
+    code encoding: trim size + color + quality + binding + paper weight + laminate.
+
+    Format: {width}X{height}{color}{quality}{binding}{paper_weight}{laminate}
+    Docs: https://developers.lulu.com/pages/docs/misc/pod-package-id
     """
-    url = f"{settings.LULU_API_URL.rstrip('/')}/print-jobs/specifications/"
-    resp = requests.get(url, headers=_headers(), timeout=15)
-    resp.raise_for_status()
-    return resp.json()
+    return [
+        # ── Paperback / Perfect Bind ─────────────────────────────────────────
+        {"id": "0600X0900BWSTDPB060UW444MXX", "description": "6×9\" B&W Standard Paperback (60# uncoated)"},
+        {"id": "0600X0900FCSTDPB060UW444MXX", "description": "6×9\" Full Color Standard Paperback (60# uncoated)"},
+        {"id": "0600X0900BWSTDPB080CW444MXX", "description": "6×9\" B&W Standard Paperback (80# coated white)"},
+        {"id": "0550X0850BWSTDPB060UW444MXX", "description": "5.5×8.5\" B&W Standard Paperback (60# uncoated)"},
+        {"id": "0550X0850FCSTDPB060UW444MXX", "description": "5.5×8.5\" Full Color Standard Paperback (60# uncoated)"},
+        {"id": "0825X1075BWSTDPB060UW444MXX", "description": "8.25×10.75\" B&W Standard Paperback (60# uncoated)"},
+        {"id": "0825X1075FCSTDPB060UW444MXX", "description": "8.25×10.75\" Full Color Standard Paperback (60# uncoated)"},
+        {"id": "0850X1100BWSTDPB060UW444MXX", "description": "8.5×11\" B&W Standard Paperback (60# uncoated)"},
+        {"id": "0850X1100FCSTDPB060UW444MXX", "description": "8.5×11\" Full Color Standard Paperback (60# uncoated)"},
+        # ── Hardcover / Case Laminate ────────────────────────────────────────
+        {"id": "0600X0900BWSTDHC060UW444MXX", "description": "6×9\" B&W Hardcover (60# uncoated)"},
+        {"id": "0600X0900FCSTDHC060UW444MXX", "description": "6×9\" Full Color Hardcover (60# uncoated)"},
+        {"id": "0550X0850BWSTDHC060UW444MXX", "description": "5.5×8.5\" B&W Hardcover (60# uncoated)"},
+        {"id": "0550X0850FCSTDHC060UW444MXX", "description": "5.5×8.5\" Full Color Hardcover (60# uncoated)"},
+        {"id": "0850X1100BWSTDHC060UW444MXX", "description": "8.5×11\" B&W Hardcover (60# uncoated)"},
+        {"id": "0850X1100FCSTDHC060UW444MXX", "description": "8.5×11\" Full Color Hardcover (60# uncoated)"},
+        # ── Saddle Stitch (booklet / magazine ≤80 pages) ────────────────────
+        {"id": "0600X0900BWSTDSS060UW444MXX", "description": "6×9\" B&W Saddle Stitch (60# uncoated)"},
+        {"id": "0850X1100BWSTDSS060UW444MXX", "description": "8.5×11\" B&W Saddle Stitch (60# uncoated)"},
+        {"id": "0850X1100FCSTDSS060UW444MXX", "description": "8.5×11\" Full Color Saddle Stitch (60# uncoated)"},
+    ]
