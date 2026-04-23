@@ -156,7 +156,7 @@ class ShippingAddress(models.Model):
     phone = models.CharField(max_length=20)
     address_line = models.CharField(max_length=255)
     city = models.CharField(max_length=100)
-    country = models.CharField(max_length=100)
+    country = models.CharField(max_length=2, help_text="ISO 3166-1 alpha-2 country code (e.g. 'US', 'AE', 'KW')")
     postal_code = models.CharField(max_length=20, blank=True, null=True)
 
     def __str__(self):

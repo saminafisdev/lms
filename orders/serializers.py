@@ -160,6 +160,14 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
             "postal_code",
         ]
 
+    def validate_country(self, value):
+        import re
+        if not re.match(r'^[A-Z]{2}$', value.strip()):
+            raise serializers.ValidationError(
+                "Must be a 2-letter ISO country code (e.g. 'US', 'GB', 'AE', 'KW')."
+            )
+        return value.strip()
+
 
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
