@@ -58,6 +58,26 @@ class AdminBookSerializer(SlugMixin, serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "updated_at", "gallery_images"]
 
+    def validate(self, attrs):
+        # On partial updates, fall back to the current instance values
+        instance = self.instance
+        has_physical = attrs.get("has_physical", getattr(instance, "has_physical", False))
+
+        if has_physical:
+            missing = []
+            for field in ("digital_file", "lulu_cover_pdf", "lulu_pod_package_id"):
+                value = attrs.get(field, getattr(instance, field, None))
+                if not value:
+                    missing.append(field)
+            if missing:
+                raise serializers.ValidationError(
+                    {
+                        f: f"Required when has_physical is true."
+                        for f in missing
+                    }
+                )
+        return attrs
+
 
 class PublicBookSerializer(serializers.ModelSerializer):
     """
