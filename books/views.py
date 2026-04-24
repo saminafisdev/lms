@@ -296,8 +296,9 @@ class BookViewSet(viewsets.ModelViewSet):
             msg = str(e)
             if "405" in msg:
                 msg = (
-                    "Lulu interior validation is not available on the sandbox API. "
-                    "Switch LULU_API_URL to https://api.lulu.com (production) to use this feature."
+                    "Lulu interior validation returned 405 — your Lulu API account may not have "
+                    "validation permissions enabled. Contact Lulu support to request access, "
+                    "or manually set the pod_package_id from the /books/lulu-packages/ reference list."
                 )
             return Response({"error": msg}, status=status.HTTP_502_BAD_GATEWAY)
 
