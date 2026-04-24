@@ -62,7 +62,7 @@ class Book(models.Model):
     # Lulu print-on-demand fields (only needed for physical books)
     lulu_pod_package_id = models.CharField(
         max_length=100, blank=True, null=True,
-        help_text="Lulu pod_package_id encoding paper size, binding, color. e.g. 0600X0900BWSTDSS060UW444MXX"
+        help_text="Lulu pod_package_id in dot-separated format: TrimSize.Color.Quality.Binding.Paper.CoverFinish — e.g. 0827X1169.FC.STD.PB.060UW444.MXX"
     )
     lulu_cover_pdf = models.FileField(
         upload_to="books/lulu_covers/", validators=[validate_pdf], blank=True, null=True,
