@@ -293,10 +293,13 @@ class BookViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_202_ACCEPTED,
             )
         except Exception as e:
-            return Response(
-                {"error": f"Lulu validation request failed: {str(e)}"},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+            msg = str(e)
+            if "405" in msg:
+                msg = (
+                    "Lulu interior validation is not available on the sandbox API. "
+                    "Switch LULU_API_URL to https://api.lulu.com (production) to use this feature."
+                )
+            return Response({"error": msg}, status=status.HTTP_502_BAD_GATEWAY)
 
     @extend_schema(
         parameters=[
