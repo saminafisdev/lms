@@ -116,48 +116,77 @@ def get_print_job(print_job_id: str) -> dict:
     return resp.json()
 
 
+def submit_interior_validation(source_url: str, pod_package_id: str = None) -> dict:
+    """
+    Submit an interior PDF for async validation by Lulu.
+    Returns the validation record (id, status='VALIDATING').
+    Poll get_interior_validation(id) until status is VALIDATED/NORMALIZED/ERROR.
+    """
+    url = f"{settings.LULU_API_URL.rstrip('/')}/print-jobs/interior-validations/"
+    payload = {"source_url": source_url}
+    if pod_package_id:
+        payload["pod_package_id"] = pod_package_id
+    resp = requests.post(url, json=payload, headers=_headers(), timeout=15)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_interior_validation(validation_id: int) -> dict:
+    """
+    Poll the result of an interior validation.
+    Final statuses: VALIDATED, NORMALIZED, ERROR.
+    """
+    url = f"{settings.LULU_API_URL.rstrip('/')}/print-jobs/interior-validations/{validation_id}/"
+    resp = requests.get(url, headers=_headers(), timeout=15)
+    resp.raise_for_status()
+    return resp.json()
+
+
 def get_print_specs() -> list:
     """
     Return a reference list of common Lulu pod_package_id codes.
 
     Lulu does not expose an API endpoint for this — the id is a fixed-format
-    code encoding: trim size + color + quality + binding + paper weight + laminate.
+    code encoding 6 components separated by dots:
+    {trim_size}.{color}.{quality}.{binding}.{paper}.{cover_finish}
 
-    Format: {width}X{height}{color}{quality}{binding}{paper_weight}{laminate}
     Docs: https://developers.lulu.com/pages/docs/misc/pod-package-id
     """
     return [
         # ── Paperback / Perfect Bind — Standard ─────────────────────────────
-        {"id": "0600X0900BWSTDPB060UW444MXX", "description": "6×9\" B&W Standard Paperback (60# uncoated)"},
-        {"id": "0600X0900FCSTDPB060UW444MXX", "description": "6×9\" Full Color Standard Paperback (60# uncoated)"},
-        {"id": "0600X0900BWSTDPB080CW444MXX", "description": "6×9\" B&W Standard Paperback (80# coated white)"},
-        {"id": "0550X0850BWSTDPB060UW444MXX", "description": "5.5×8.5\" B&W Standard Paperback (60# uncoated)"},
-        {"id": "0550X0850FCSTDPB060UW444MXX", "description": "5.5×8.5\" Full Color Standard Paperback (60# uncoated)"},
-        {"id": "0825X1075BWSTDPB060UW444MXX", "description": "8.25×10.75\" B&W Standard Paperback (60# uncoated)"},
-        {"id": "0825X1075FCSTDPB060UW444MXX", "description": "8.25×10.75\" Full Color Standard Paperback (60# uncoated)"},
-        {"id": "0827X1169BWSTDPB060UW444MXX", "description": "A4 (8.27×11.69\") B&W Standard Paperback (60# uncoated)"},
-        {"id": "0827X1169FCSTDPB060UW444MXX", "description": "A4 (8.27×11.69\") Full Color Standard Paperback (60# uncoated)"},
-        {"id": "0850X1100BWSTDPB060UW444MXX", "description": "8.5×11\" B&W Standard Paperback (60# uncoated)"},
-        {"id": "0850X1100FCSTDPB060UW444MXX", "description": "8.5×11\" Full Color Standard Paperback (60# uncoated)"},
+        {"id": "0600X0900.BW.STD.PB.060UW444.MXX", "description": "6×9\" B&W Standard Paperback (60# uncoated, matte)"},
+        {"id": "0600X0900.FC.STD.PB.060UW444.MXX", "description": "6×9\" Full Color Standard Paperback (60# uncoated, matte)"},
+        {"id": "0600X0900.BW.STD.PB.080CW444.MXX", "description": "6×9\" B&W Standard Paperback (80# coated white, matte)"},
+        {"id": "0600X0900.FC.STD.PB.080CW444.GXX", "description": "6×9\" Full Color Standard Paperback (80# coated white, gloss)"},
+        {"id": "0550X0850.BW.STD.PB.060UW444.MXX", "description": "5.5×8.5\" B&W Standard Paperback (60# uncoated, matte)"},
+        {"id": "0550X0850.FC.STD.PB.060UW444.MXX", "description": "5.5×8.5\" Full Color Standard Paperback (60# uncoated, matte)"},
+        {"id": "0825X1075.BW.STD.PB.060UW444.MXX", "description": "8.25×10.75\" B&W Standard Paperback (60# uncoated, matte)"},
+        {"id": "0825X1075.FC.STD.PB.060UW444.MXX", "description": "8.25×10.75\" Full Color Standard Paperback (60# uncoated, matte)"},
+        {"id": "0827X1169.BW.STD.PB.060UW444.MXX", "description": "A4 (8.27×11.69\") B&W Standard Paperback (60# uncoated, matte)"},
+        {"id": "0827X1169.FC.STD.PB.060UW444.MXX", "description": "A4 (8.27×11.69\") Full Color Standard Paperback (60# uncoated, matte)"},
+        {"id": "0850X1100.BW.STD.PB.060UW444.MXX", "description": "8.5×11\" B&W Standard Paperback (60# uncoated, matte)"},
+        {"id": "0850X1100.FC.STD.PB.060UW444.MXX", "description": "8.5×11\" Full Color Standard Paperback (60# uncoated, matte)"},
         # ── Paperback / Perfect Bind — Premium (for high ink coverage PDFs) ──
-        {"id": "0600X0900FCPREPB060UW444MXX", "description": "6×9\" Full Color Premium Paperback (60# uncoated)"},
-        {"id": "0550X0850FCPREPB060UW444MXX", "description": "5.5×8.5\" Full Color Premium Paperback (60# uncoated)"},
-        {"id": "0825X1075FCPREPB060UW444MXX", "description": "8.25×10.75\" Full Color Premium Paperback (60# uncoated)"},
-        {"id": "0827X1169FCPREPB060UW444MXX", "description": "A4 (8.27×11.69\") Full Color Premium Paperback (60# uncoated)"},
-        {"id": "0850X1100FCPREPB060UW444MXX", "description": "8.5×11\" Full Color Premium Paperback (60# uncoated)"},
-        # ── Hardcover / Case Laminate — Standard ────────────────────────────
-        {"id": "0600X0900BWSTDHC060UW444MXX", "description": "6×9\" B&W Hardcover (60# uncoated)"},
-        {"id": "0600X0900FCSTDHC060UW444MXX", "description": "6×9\" Full Color Hardcover (60# uncoated)"},
-        {"id": "0550X0850BWSTDHC060UW444MXX", "description": "5.5×8.5\" B&W Hardcover (60# uncoated)"},
-        {"id": "0550X0850FCSTDHC060UW444MXX", "description": "5.5×8.5\" Full Color Hardcover (60# uncoated)"},
-        {"id": "0850X1100BWSTDHC060UW444MXX", "description": "8.5×11\" B&W Hardcover (60# uncoated)"},
-        {"id": "0850X1100FCSTDHC060UW444MXX", "description": "8.5×11\" Full Color Hardcover (60# uncoated)"},
-        # ── Hardcover — Premium ──────────────────────────────────────────────
-        {"id": "0600X0900FCPREHC060UW444MXX", "description": "6×9\" Full Color Premium Hardcover (60# uncoated)"},
-        {"id": "0850X1100FCPREHC060UW444MXX", "description": "8.5×11\" Full Color Premium Hardcover (60# uncoated)"},
+        {"id": "0600X0900.FC.PRE.PB.060UW444.MXX", "description": "6×9\" Full Color Premium Paperback (60# uncoated, matte)"},
+        {"id": "0550X0850.FC.PRE.PB.060UW444.MXX", "description": "5.5×8.5\" Full Color Premium Paperback (60# uncoated, matte)"},
+        {"id": "0825X1075.FC.PRE.PB.060UW444.MXX", "description": "8.25×10.75\" Full Color Premium Paperback (60# uncoated, matte)"},
+        {"id": "0827X1169.FC.PRE.PB.060UW444.MXX", "description": "A4 (8.27×11.69\") Full Color Premium Paperback (60# uncoated, matte)"},
+        {"id": "0850X1100.FC.PRE.PB.060UW444.MXX", "description": "8.5×11\" Full Color Premium Paperback (60# uncoated, matte)"},
+        # ── Hardcover / Case Laminate ────────────────────────────────────────
+        {"id": "0600X0900.BW.STD.HC.060UW444.MXX", "description": "6×9\" B&W Hardcover (60# uncoated, matte)"},
+        {"id": "0600X0900.FC.STD.HC.060UW444.MXX", "description": "6×9\" Full Color Hardcover (60# uncoated, matte)"},
+        {"id": "0550X0850.BW.STD.HC.060UW444.MXX", "description": "5.5×8.5\" B&W Hardcover (60# uncoated, matte)"},
+        {"id": "0550X0850.FC.STD.HC.060UW444.MXX", "description": "5.5×8.5\" Full Color Hardcover (60# uncoated, matte)"},
+        {"id": "0850X1100.BW.STD.HC.060UW444.MXX", "description": "8.5×11\" B&W Hardcover (60# uncoated, matte)"},
+        {"id": "0850X1100.FC.STD.HC.060UW444.MXX", "description": "8.5×11\" Full Color Hardcover (60# uncoated, matte)"},
+        {"id": "0600X0900.FC.PRE.HC.060UW444.MXX", "description": "6×9\" Full Color Premium Hardcover (60# uncoated, matte)"},
+        {"id": "0850X1100.FC.PRE.HC.060UW444.MXX", "description": "8.5×11\" Full Color Premium Hardcover (60# uncoated, matte)"},
+        # ── Coil Bound ───────────────────────────────────────────────────────
+        {"id": "0700X1000.FC.PRE.CO.060UC444.MXX", "description": "7×10\" Full Color Premium Coil Bound (60# cream, matte)"},
+        {"id": "0850X1100.BW.STD.CO.060UW444.MXX", "description": "8.5×11\" B&W Standard Coil Bound (60# uncoated, matte)"},
         # ── Saddle Stitch (booklet / magazine, 2–80 pages) ──────────────────
-        {"id": "0600X0900BWSTDSS060UW444MXX", "description": "6×9\" B&W Saddle Stitch (60# uncoated)"},
-        {"id": "0850X1100BWSTDSS060UW444MXX", "description": "8.5×11\" B&W Saddle Stitch (60# uncoated)"},
-        {"id": "0850X1100FCSTDSS060UW444MXX", "description": "8.5×11\" Full Color Saddle Stitch (60# uncoated)"},
-        {"id": "0850X1100FCPRESS060UW444MXX",  "description": "8.5×11\" Full Color Premium Saddle Stitch (60# uncoated)"},
+        {"id": "0600X0900.BW.STD.SS.060UW444.MXX", "description": "6×9\" B&W Saddle Stitch (60# uncoated, matte)"},
+        {"id": "0850X1100.BW.STD.SS.060UW444.MXX", "description": "8.5×11\" B&W Saddle Stitch (60# uncoated, matte)"},
+        {"id": "0850X1100.FC.STD.SS.060UW444.MXX", "description": "8.5×11\" Full Color Saddle Stitch (60# uncoated, matte)"},
+        {"id": "0850X1100.FC.PRE.SS.060UW444.MXX", "description": "8.5×11\" Full Color Premium Saddle Stitch (60# uncoated, matte)"},
     ]

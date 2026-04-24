@@ -246,6 +246,107 @@ class BookViewSet(viewsets.ModelViewSet):
         from orders.lulu import get_print_specs
         return Response(get_print_specs())
 
+    @extend_schema(
+        request=inline_serializer("LuluValidateRequestSerializer", fields={
+            "pod_package_id": drf_serializers.CharField(required=False, help_text="Optional — include for extended normalization validation"),
+        }),
+        responses={202: inline_serializer("LuluValidateResponseSerializer", fields={
+            "validation_id": drf_serializers.IntegerField(),
+            "status": drf_serializers.CharField(),
+            "message": drf_serializers.CharField(),
+        })},
+        summary="Submit interior PDF for Lulu validation",
+        description=(
+            "Admin only. Submits the book's digital_file PDF to Lulu for async validation. "
+            "Returns a validation_id — poll GET /books/{slug}/lulu-validate-result/?validation_id=X for the result. "
+            "If pod_package_id is provided, Lulu also checks if the PDF matches that format."
+        ),
+        tags=["Books"],
+    )
+    @action(detail=True, methods=["post"], url_path="lulu-validate",
+            permission_classes=[IsAdminRole])
+    def lulu_validate(self, request, slug=None):
+        """
+        POST /books/{slug}/lulu-validate/
+        Submit the book's interior PDF to Lulu for validation.
+        Admin only.
+        """
+        book = self.get_object()
+        if not book.digital_file:
+            return Response(
+                {"error": "This book has no digital_file to validate."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            from orders.lulu import submit_interior_validation
+            pod_package_id = request.data.get("pod_package_id") or book.lulu_pod_package_id or None
+            result = submit_interior_validation(
+                source_url=book.digital_file.url,
+                pod_package_id=pod_package_id,
+            )
+            return Response(
+                {
+                    "validation_id": result["id"],
+                    "status": result.get("status"),
+                    "message": "Validation submitted. Poll lulu-validate-result/ with this validation_id for the result.",
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Lulu validation request failed: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+    @extend_schema(
+        parameters=[
+            inline_serializer("LuluValidateResultParams", fields={
+                "validation_id": drf_serializers.IntegerField(),
+            })
+        ],
+        responses={200: inline_serializer("LuluValidateResultSerializer", fields={
+            "status": drf_serializers.CharField(),
+            "page_count": drf_serializers.CharField(required=False),
+            "errors": drf_serializers.ListField(child=drf_serializers.CharField(), required=False),
+            "valid_pod_package_ids": drf_serializers.ListField(child=drf_serializers.CharField(), required=False),
+        })},
+        summary="Poll Lulu interior validation result",
+        description=(
+            "Admin only. Poll the result of a previously submitted validation. "
+            "Status will be VALIDATING/VALIDATED/NORMALIZED/ERROR. "
+            "valid_pod_package_ids lists all compatible pod_package_ids for this PDF."
+        ),
+        tags=["Books"],
+    )
+    @action(detail=False, methods=["get"], url_path="lulu-validate-result",
+            permission_classes=[IsAdminRole])
+    def lulu_validate_result(self, request):
+        """
+        GET /books/lulu-validate-result/?validation_id=123
+        Poll the result of a Lulu interior validation.
+        Admin only.
+        """
+        validation_id = request.query_params.get("validation_id")
+        if not validation_id:
+            return Response(
+                {"error": "validation_id query param is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            from orders.lulu import get_interior_validation
+            result = get_interior_validation(int(validation_id))
+            return Response({
+                "status": result.get("status"),
+                "page_count": result.get("page_count"),
+                "errors": result.get("errors", []),
+                "valid_pod_package_ids": result.get("valid_pod_package_ids", []),
+            })
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to fetch validation result: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
 
 class BookGalleryImageViewSet(viewsets.ModelViewSet):
     """
