@@ -123,6 +123,7 @@ DJOSER = {
     "LOGIN_FIELD": "email",
     "USER_CREATE_PASSWORD_RETYPE": True,
     "SEND_ACTIVATION_EMAIL": False,
+    "SET_PASSWORD_RETYPE": True,
     "PASSWORD_RESET_CONFIRM_RETYPE": True,
     "PASSWORD_RESET_CONFIRM_URL": "reset-password/{uid}/{token}",
     "EMAIL_FRONTEND_DOMAIN": env("FRONTEND_URL", default="").replace("https://", "").replace("http://", "").rstrip("/"),
