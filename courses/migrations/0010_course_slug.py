@@ -28,7 +28,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='course',
             name='slug',
-            field=models.SlugField(blank=True, max_length=255, default='', unique=False),
+            field=models.SlugField(blank=True, max_length=255, default='', unique=False, db_index=False),
         ),
         migrations.RunPython(populate_course_slugs, migrations.RunPython.noop),
         migrations.AlterField(
