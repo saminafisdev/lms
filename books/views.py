@@ -120,7 +120,7 @@ class BookViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
             permission_classes = [permissions.AllowAny]
-        elif self.action in ["download", "my_library"]:
+        elif self.action in ["read", "my_library"]:
             permission_classes = [permissions.IsAuthenticated]
         else:
             permission_classes = [IsAdminRole]
