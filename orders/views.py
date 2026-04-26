@@ -6,8 +6,8 @@ from django.conf import settings
 from django.db import models
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from drf_spectacular.utils import extend_schema
-from rest_framework import permissions, status, viewsets
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -155,6 +155,33 @@ class CartViewSet(viewsets.ViewSet):
         cart.items.all().delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @extend_schema(
+        request=inline_serializer("ShippingEstimateRequestSerializer", fields={
+            "country_code": serializers.CharField(help_text="2-letter ISO country code (e.g. 'US', 'GB', 'KW')"),
+            "shipping_level": serializers.ChoiceField(
+                choices=["MAIL", "PRIORITY_MAIL", "GROUND", "EXPEDITED", "EXPRESS"],
+                default="MAIL",
+                help_text="Lulu shipping speed level",
+            ),
+        }),
+        responses={
+            200: inline_serializer("ShippingEstimateResponseSerializer", fields={
+                "country_code": serializers.CharField(),
+                "shipping_level": serializers.CharField(),
+                "shipping_cost": serializers.DecimalField(max_digits=10, decimal_places=2, help_text="Shipping cost excluding tax (USD)"),
+                "shipping_cost_incl_tax": serializers.DecimalField(max_digits=10, decimal_places=2, help_text="Shipping cost including tax (USD)"),
+                "currency": serializers.CharField(),
+            }),
+            400: OpenApiResponse(description="No physical books in cart or invalid country_code"),
+            502: OpenApiResponse(description="Lulu API unavailable"),
+        },
+        summary="Estimate shipping cost",
+        description=(
+            "Returns the Lulu shipping cost for all physical books in the cart "
+            "for the given destination country and shipping level. "
+            "Call this before checkout to show the user the shipping cost."
+        ),
+    )
     @action(detail=False, methods=["post"], url_path="estimate-shipping")
     def estimate_shipping(self, request):
         """
@@ -370,7 +397,22 @@ class OrderViewSet(viewsets.ViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    @extend_schema(request=CartCheckoutSerializer, responses={201: OrderSerializer})
+    @extend_schema(
+        request=CartCheckoutSerializer,
+        responses={
+            201: OrderSerializer,
+            400: OpenApiResponse(description="Cart empty, missing shipping_address, or insufficient stock"),
+        },
+        summary="Checkout cart",
+        description=(
+            "Checkout the full cart — courses, bundles, digital books, and physical books.\n\n"
+            "`shipping_address` and `shipping_level` are required when the cart contains physical books.\n\n"
+            "For physical books, the Lulu shipping cost is fetched automatically and added as a "
+            "separate line item in the Stripe checkout session. "
+            "Call `POST /cart/estimate-shipping/` first to show the user the shipping cost before they confirm.\n\n"
+            "**Shipping levels:** `MAIL` (default), `PRIORITY_MAIL`, `GROUND`, `EXPEDITED`, `EXPRESS`"
+        ),
+    )
     @action(detail=False, methods=["post"], url_path="checkout")
     def checkout(self, request):
         """
