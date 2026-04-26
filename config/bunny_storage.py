@@ -16,14 +16,14 @@ def generate_bunny_signed_url(file_name: str, expiry_seconds: int = 7200) -> str
 
     Returns:
         A signed CDN URL:
-        https://cdn.example.com/books/digital/mybook.pdf?token=ABC&expires=1714123456
+        https://books.example.com/books/digital/mybook.pdf?token=ABC&expires=1714123456
 
     Prerequisites:
-        - BUNNY_CDN_HOSTNAME set in settings (e.g. https://cdn.example.com)
-        - BUNNY_TOKEN_KEY set in settings (from Pull Zone → Security → Token Authentication)
-        - Token Authentication enabled on the Bunny Pull Zone
+        - BUNNY_BOOKS_CDN_HOSTNAME: separate pull zone with Token Auth enabled (e.g. https://books.example.com)
+        - BUNNY_TOKEN_KEY: Token Authentication key from that pull zone's Security settings
+        - Token Authentication enabled only on the books pull zone (not the main CDN)
     """
-    cdn_base = settings.BUNNY_CDN_HOSTNAME.rstrip("/")
+    cdn_base = (settings.BUNNY_BOOKS_CDN_HOSTNAME or settings.BUNNY_CDN_HOSTNAME).rstrip("/")
     token_key = settings.BUNNY_TOKEN_KEY
     expiry = int(time.time()) + expiry_seconds
 
