@@ -60,6 +60,10 @@ class Book(models.Model):
     stock_count = models.PositiveIntegerField(default=0)
 
     # Lulu print-on-demand fields (only needed for physical books)
+    page_count = models.PositiveIntegerField(
+        blank=True, null=True,
+        help_text="Number of interior pages. Required for Lulu shipping cost calculation."
+    )
     lulu_pod_package_id = models.CharField(
         max_length=100, blank=True, null=True,
         help_text="Lulu pod_package_id in dot-separated format: TrimSize.Color.Quality.Binding.Paper.CoverFinish — e.g. 0827X1169.FC.STD.PB.060UW444.MXX"

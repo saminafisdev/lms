@@ -108,7 +108,49 @@ def create_print_job(
     return result
 
 
-def get_print_job(print_job_id: str) -> dict:
+def calculate_shipping_cost(
+    *,
+    line_items: list,
+    country_code: str,
+    shipping_level: str = "MAIL",
+) -> dict:
+    """
+    Calculate Lulu print job cost (shipping only — printing cost is set by admin).
+
+    line_items: list of dicts with keys:
+        - pod_package_id: str
+        - page_count: int
+        - quantity: int
+
+    Returns the full Lulu cost calculation response, including:
+        shipping_cost.total_cost_excl_tax
+        shipping_cost.total_cost_incl_tax
+        line_item_costs (list)
+    """
+    url = f"{settings.LULU_API_URL.rstrip('/')}/print-job-cost-calculations/"
+    payload = {
+        "line_items": [
+            {
+                "pod_package_id": item["pod_package_id"],
+                "page_count": item["page_count"],
+                "quantity": item["quantity"],
+            }
+            for item in line_items
+        ],
+        "shipping_address": {"country_code": country_code},
+        "shipping_level": shipping_level,
+        "currency": "USD",
+    }
+    resp = requests.post(url, json=payload, headers=_headers(), timeout=15)
+    if not resp.ok:
+        logger.error(
+            "Lulu calculate_shipping_cost failed: %s — %s", resp.status_code, resp.text
+        )
+        resp.raise_for_status()
+    return resp.json()
+
+
+
     """Fetch the current status of a Lulu print job."""
     url = f"{settings.LULU_API_URL.rstrip('/')}/print-jobs/{print_job_id}/"
     resp = requests.get(url, headers=_headers(), timeout=15)

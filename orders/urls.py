@@ -7,6 +7,7 @@ cart_list = CartViewSet.as_view({"get": "list"})
 cart_add = CartViewSet.as_view({"post": "create"})
 cart_item = CartViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
 cart_clear = CartViewSet.as_view({"delete": "clear"})
+cart_estimate_shipping = CartViewSet.as_view({"post": "estimate_shipping"})
 
 order_list = OrderViewSet.as_view({"get": "list"})
 order_detail = OrderViewSet.as_view({"get": "retrieve"})
@@ -24,6 +25,7 @@ urlpatterns = [
     path("cart/items/", cart_add, name="cart-add"),
     path("cart/items/<int:pk>/", cart_item, name="cart-item"),
     path("cart/clear/", cart_clear, name="cart-clear"),
+    path("cart/estimate-shipping/", cart_estimate_shipping, name="cart-estimate-shipping"),
     # Orders
     path("orders/", order_list, name="order-list"),
     path("orders/<int:pk>/", order_detail, name="order-detail"),

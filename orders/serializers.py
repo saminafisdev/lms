@@ -202,6 +202,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "status",
             "fulfillment_status",
             "total_amount",
+            "shipping_cost",
             "items",
             "shipping_address",
             "created_at",
@@ -299,10 +300,22 @@ class DirectPurchaseSerializer(serializers.Serializer):
         return data
 
 
+SHIPPING_LEVEL_CHOICES = [
+    "MAIL",
+    "PRIORITY_MAIL",
+    "GROUND",
+    "EXPEDITED",
+    "EXPRESS",
+]
+
+
 class CartCheckoutSerializer(serializers.Serializer):
     """For checking out the cart. shipping_address required only when cart has physical items."""
 
     shipping_address = ShippingAddressSerializer(required=False)
+    shipping_level = serializers.ChoiceField(
+        choices=SHIPPING_LEVEL_CHOICES, default="MAIL", required=False
+    )
 
 
 class BookSaleSerializer(serializers.ModelSerializer):

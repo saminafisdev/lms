@@ -17,6 +17,7 @@ from config.permissions import IsAdminRole
 from courses.models import Enrollment
 from config.tasks import send_email_task, create_zoom_meeting_for_slot_task, create_lulu_print_job_task
 from orders.models import ShippingAddress
+from orders.lulu import calculate_shipping_cost
 from orders.serializers import BookSaleSerializer, UpdateFulfillmentSerializer
 from orders.stripe import construct_webhook_event, create_checkout_session, create_payment_intent
 
@@ -153,6 +154,83 @@ class CartViewSet(viewsets.ViewSet):
         cart = self.get_or_create_cart(request.user)
         cart.items.all().delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=["post"], url_path="estimate-shipping")
+    def estimate_shipping(self, request):
+        """
+        POST /cart/estimate-shipping/
+        Returns Lulu shipping cost for the physical books in the cart.
+
+        Request body:
+            country_code: str  (2-letter ISO, e.g. "US", "GB", "KW")
+            shipping_level: str  (MAIL | PRIORITY_MAIL | GROUND | EXPEDITED | EXPRESS)
+        """
+        country_code = request.data.get("country_code", "").strip().upper()
+        shipping_level = request.data.get("shipping_level", "MAIL").strip().upper()
+
+        if not country_code or len(country_code) != 2:
+            return Response(
+                {"error": "country_code must be a 2-letter ISO code (e.g. 'US', 'GB')."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        cart = Cart.objects.filter(user=request.user).first()
+        physical_items = [
+            i for i in (cart.items.select_related("book").all() if cart else [])
+            if i.item_type == CartItem.ItemType.PHYSICAL_BOOK
+        ]
+
+        if not physical_items:
+            return Response(
+                {"error": "No physical books in your cart."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        missing = [
+            i.book.title for i in physical_items
+            if not i.book.page_count or not i.book.lulu_pod_package_id
+        ]
+        if missing:
+            return Response(
+                {
+                    "error": "Some books are missing Lulu configuration and cannot be estimated.",
+                    "books": missing,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        lulu_line_items = [
+            {
+                "pod_package_id": i.book.lulu_pod_package_id,
+                "page_count": i.book.page_count,
+                "quantity": i.quantity,
+            }
+            for i in physical_items
+        ]
+
+        try:
+            result = calculate_shipping_cost(
+                line_items=lulu_line_items,
+                country_code=country_code,
+                shipping_level=shipping_level,
+            )
+        except Exception as exc:
+            logger.error("Lulu shipping estimate failed: %s", exc, exc_info=True)
+            return Response(
+                {"error": "Could not retrieve shipping estimate from Lulu. Please try again."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        shipping = result.get("shipping_cost", {})
+        return Response(
+            {
+                "country_code": country_code,
+                "shipping_level": shipping_level,
+                "shipping_cost": shipping.get("total_cost_excl_tax", "0.00"),
+                "shipping_cost_incl_tax": shipping.get("total_cost_incl_tax", "0.00"),
+                "currency": result.get("currency", "USD"),
+            }
+        )
 
 
 class OrderViewSet(viewsets.ViewSet):
@@ -329,7 +407,36 @@ class OrderViewSet(viewsets.ViewSet):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-        total = cart.get_total()
+        # Calculate Lulu shipping cost for physical books
+        shipping_cost = 0
+        shipping_level = serializer.validated_data.get("shipping_level", "MAIL")
+        if has_physical:
+            physical_items = [i for i in items if i.item_type == CartItem.ItemType.PHYSICAL_BOOK]
+            lulu_line_items = [
+                {
+                    "pod_package_id": i.book.lulu_pod_package_id,
+                    "page_count": i.book.page_count,
+                    "quantity": i.quantity,
+                }
+                for i in physical_items
+                if i.book.lulu_pod_package_id and i.book.page_count
+            ]
+            if lulu_line_items:
+                country_code = serializer.validated_data["shipping_address"]["country"]
+                try:
+                    cost_result = calculate_shipping_cost(
+                        line_items=lulu_line_items,
+                        country_code=country_code,
+                        shipping_level=shipping_level,
+                    )
+                    shipping_cost = float(
+                        cost_result.get("shipping_cost", {}).get("total_cost_excl_tax", 0)
+                    )
+                except Exception as exc:
+                    logger.warning("Lulu shipping cost fetch failed: %s", exc)
+                    # Non-blocking — proceed without shipping cost if Lulu is unavailable
+
+        total = cart.get_total() + shipping_cost
         fulfillment_status = (
             Order.FulfillmentStatus.PROCESSING
             if has_physical
@@ -340,6 +447,7 @@ class OrderViewSet(viewsets.ViewSet):
             order_type=Order.OrderType.CART,
             status=Order.PaymentStatus.PENDING,
             total_amount=total,
+            shipping_cost=shipping_cost,
             fulfillment_status=fulfillment_status,
         )
 
@@ -373,6 +481,17 @@ class OrderViewSet(viewsets.ViewSet):
                     "product_data": {"name": item.get_display_name()},
                 },
                 "quantity": item.quantity,
+            })
+
+        # Add shipping as a separate Stripe line item
+        if shipping_cost > 0:
+            stripe_line_items.append({
+                "price_data": {
+                    "currency": settings.CURRENCY,
+                    "unit_amount": int(shipping_cost * 100),
+                    "product_data": {"name": f"Shipping ({shipping_level.replace('_', ' ').title()})"},
+                },
+                "quantity": 1,
             })
 
         # Free cart (e.g. 100% scholarship applied prior) — skip Stripe
