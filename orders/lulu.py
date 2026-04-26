@@ -112,6 +112,11 @@ def calculate_shipping_cost(
     *,
     line_items: list,
     country_code: str,
+    city: str = "",
+    street1: str = "",
+    postcode: str = "",
+    phone_number: str = "",
+    state_code: str = "",
     shipping_level: str = "MAIL",
 ) -> dict:
     """
@@ -128,6 +133,17 @@ def calculate_shipping_cost(
         line_item_costs (list)
     """
     url = f"{settings.LULU_API_URL.rstrip('/')}/print-job-cost-calculations/"
+    shipping_address = {"country_code": country_code}
+    if city:
+        shipping_address["city"] = city
+    if street1:
+        shipping_address["street1"] = street1
+    if postcode:
+        shipping_address["postcode"] = postcode
+    if phone_number:
+        shipping_address["phone_number"] = phone_number
+    if state_code:
+        shipping_address["state_code"] = state_code
     payload = {
         "line_items": [
             {
@@ -137,7 +153,7 @@ def calculate_shipping_cost(
             }
             for item in line_items
         ],
-        "shipping_address": {"country_code": country_code},
+        "shipping_address": shipping_address,
         "shipping_level": shipping_level,
         "currency": "USD",
     }

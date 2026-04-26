@@ -158,6 +158,11 @@ class CartViewSet(viewsets.ViewSet):
     @extend_schema(
         request=inline_serializer("ShippingEstimateRequestSerializer", fields={
             "country_code": serializers.CharField(help_text="2-letter ISO country code (e.g. 'US', 'GB', 'KW')"),
+            "city": serializers.CharField(help_text="City name"),
+            "street1": serializers.CharField(help_text="Street address line 1"),
+            "postal_code": serializers.CharField(help_text="Postal / ZIP code"),
+            "phone": serializers.CharField(help_text="Phone number (e.g. '+15551234567')"),
+            "state_code": serializers.CharField(required=False, help_text="State/province code (e.g. 'NY'). Required for US/CA."),
             "shipping_level": serializers.ChoiceField(
                 choices=["MAIL", "PRIORITY_MAIL", "GROUND", "EXPEDITED", "EXPRESS"],
                 default="MAIL",
@@ -172,13 +177,14 @@ class CartViewSet(viewsets.ViewSet):
                 "shipping_cost_incl_tax": serializers.DecimalField(max_digits=10, decimal_places=2, help_text="Shipping cost including tax (USD)"),
                 "currency": serializers.CharField(),
             }),
-            400: OpenApiResponse(description="No physical books in cart or invalid country_code"),
+            400: OpenApiResponse(description="No physical books in cart, missing fields, or invalid country_code"),
             502: OpenApiResponse(description="Lulu API unavailable"),
         },
         summary="Estimate shipping cost",
         description=(
             "Returns the Lulu shipping cost for all physical books in the cart "
-            "for the given destination country and shipping level. "
+            "for the given destination and shipping level. "
+            "Accepts the same address fields as checkout. "
             "Call this before checkout to show the user the shipping cost."
         ),
     )
@@ -187,17 +193,23 @@ class CartViewSet(viewsets.ViewSet):
         """
         POST /cart/estimate-shipping/
         Returns Lulu shipping cost for the physical books in the cart.
-
-        Request body:
-            country_code: str  (2-letter ISO, e.g. "US", "GB", "KW")
-            shipping_level: str  (MAIL | PRIORITY_MAIL | GROUND | EXPEDITED | EXPRESS)
         """
         country_code = request.data.get("country_code", "").strip().upper()
+        city = request.data.get("city", "").strip()
+        street1 = request.data.get("street1", "").strip()
+        postal_code = request.data.get("postal_code", "").strip()
+        phone = request.data.get("phone", "").strip()
+        state_code = request.data.get("state_code", "").strip()
         shipping_level = request.data.get("shipping_level", "MAIL").strip().upper()
 
         if not country_code or len(country_code) != 2:
             return Response(
                 {"error": "country_code must be a 2-letter ISO code (e.g. 'US', 'GB')."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not city:
+            return Response(
+                {"error": "city is required for shipping estimate."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -239,6 +251,11 @@ class CartViewSet(viewsets.ViewSet):
             result = calculate_shipping_cost(
                 line_items=lulu_line_items,
                 country_code=country_code,
+                city=city,
+                street1=street1,
+                postcode=postal_code,
+                phone_number=phone,
+                state_code=state_code,
                 shipping_level=shipping_level,
             )
         except Exception as exc:
@@ -464,11 +481,15 @@ class OrderViewSet(viewsets.ViewSet):
                 if i.book.lulu_pod_package_id and i.book.page_count
             ]
             if lulu_line_items:
-                country_code = serializer.validated_data["shipping_address"]["country"]
+                addr = serializer.validated_data["shipping_address"]
                 try:
                     cost_result = calculate_shipping_cost(
                         line_items=lulu_line_items,
-                        country_code=country_code,
+                        country_code=addr["country"],
+                        city=addr.get("city", ""),
+                        street1=addr.get("address_line", ""),
+                        postcode=addr.get("postal_code", ""),
+                        phone_number=addr.get("phone", ""),
                         shipping_level=shipping_level,
                     )
                     shipping_cost = float(
