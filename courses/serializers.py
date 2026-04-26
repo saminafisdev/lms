@@ -589,6 +589,30 @@ class AssignmentSubmissionCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Provide either submission_text or submission_file."
             )
+
+        submission_file = data.get("submission_file")
+        assignment = self.context.get("assignment")
+
+        if submission_file and assignment:
+            # Validate file extension against allowed_file_types
+            allowed_raw = (assignment.allowed_file_types or "").strip()
+            if allowed_raw:
+                allowed_extensions = [ext.strip().lower().lstrip(".") for ext in allowed_raw.split(",") if ext.strip()]
+                file_name = getattr(submission_file, "name", "") or ""
+                file_ext = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else ""
+                if allowed_extensions and file_ext not in allowed_extensions:
+                    raise serializers.ValidationError(
+                        {"submission_file": f"File type '.{file_ext}' is not allowed. Allowed types: {allowed_raw}."}
+                    )
+
+            # Validate file size against max_file_size (in MB)
+            if assignment.max_file_size:
+                max_bytes = assignment.max_file_size * 1024 * 1024
+                if submission_file.size > max_bytes:
+                    raise serializers.ValidationError(
+                        {"submission_file": f"File size exceeds the {assignment.max_file_size}MB limit."}
+                    )
+
         return data
 
 

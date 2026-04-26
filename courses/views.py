@@ -1060,7 +1060,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        serializer = AssignmentSubmissionCreateSerializer(data=request.data)
+        serializer = AssignmentSubmissionCreateSerializer(data=request.data, context={"assignment": assignment})
         serializer.is_valid(raise_exception=True)
         submission = serializer.save(user=request.user, assignment=assignment)
 
