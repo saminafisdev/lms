@@ -48,6 +48,7 @@ class AdminBookSerializer(SlugMixin, serializers.ModelSerializer):
             "stock_count",
             "lulu_pod_package_id",
             "lulu_cover_pdf",
+            "page_count",
             "has_digital",
             "digital_price",
             "tags",
@@ -65,7 +66,7 @@ class AdminBookSerializer(SlugMixin, serializers.ModelSerializer):
 
         if has_physical:
             missing = []
-            for field in ("digital_file", "lulu_cover_pdf", "lulu_pod_package_id"):
+            for field in ("digital_file", "lulu_cover_pdf", "lulu_pod_package_id", "page_count"):
                 value = attrs.get(field, getattr(instance, field, None))
                 if not value:
                     missing.append(field)
