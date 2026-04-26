@@ -2,7 +2,6 @@ from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from django.http import HttpResponseRedirect
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from rest_framework import serializers as drf_serializers
 from .models import Book, BookCategory, BookGalleryImage
@@ -198,13 +197,16 @@ class BookViewSet(viewsets.ModelViewSet):
         serializer = PurchasedBookSerializer(books, many=True, context={"request": request})
         return Response(serializer.data)
 
-    @action(detail=True, methods=["get"], url_path="download",
+    @action(detail=True, methods=["get"], url_path="read",
             permission_classes=[permissions.IsAuthenticated])
-    def download(self, request, slug=None):
+    def read(self, request, slug=None):
         """
-        GET /books/{slug}/download/
-        Streams the digital PDF to the buyer. Returns 403 if not purchased.
+        GET /books/{slug}/read/
+        Returns a short-lived signed URL for reading the digital book in-browser.
+        The URL expires in 2 hours. Returns 403 if not purchased.
         """
+        from config.bunny_storage import generate_bunny_signed_url
+
         book = self.get_object()
 
         if not book.has_digital:
@@ -225,7 +227,13 @@ class BookViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        return HttpResponseRedirect(book.digital_file.url)
+        expiry_seconds = 7200  # 2 hours
+        signed_url = generate_bunny_signed_url(book.digital_file.name, expiry_seconds)
+
+        return Response({
+            "url": signed_url,
+            "expires_in": expiry_seconds,
+        })
 
     @extend_schema(
         responses={200: inline_serializer("LuluSpecsSerializer", fields={
