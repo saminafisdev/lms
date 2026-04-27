@@ -250,6 +250,7 @@ class CartViewSet(viewsets.ViewSet):
             for i in physical_items
         ]
 
+        import requests as req_lib
         try:
             result = calculate_shipping_cost(
                 line_items=lulu_line_items,
@@ -260,6 +261,31 @@ class CartViewSet(viewsets.ViewSet):
                 phone_number=phone,
                 state_code=state_code,
                 shipping_level=shipping_level,
+            )
+        except req_lib.HTTPError as exc:
+            logger.error("Lulu shipping estimate failed: %s", exc)
+            if exc.response is not None and exc.response.status_code == 400:
+                # Surface Lulu validation errors to the caller
+                try:
+                    lulu_errors = exc.response.json()
+                    # Flatten nested error messages from Lulu's response
+                    messages = []
+                    for _field, detail in lulu_errors.items():
+                        if isinstance(detail, dict):
+                            errors = detail.get("detail", {}).get("errors", [])
+                            for e in errors:
+                                messages.append(e.get("message", str(e)))
+                        else:
+                            messages.append(str(detail))
+                    return Response(
+                        {"error": " | ".join(messages) if messages else "Invalid address for Lulu shipping."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                except Exception:
+                    pass
+            return Response(
+                {"error": "Could not retrieve shipping estimate from Lulu. Please try again."},
+                status=status.HTTP_502_BAD_GATEWAY,
             )
         except Exception as exc:
             logger.error("Lulu shipping estimate failed: %s", exc, exc_info=True)
