@@ -18,10 +18,15 @@ class RecurringAvailabilitySerializer(serializers.ModelSerializer):
 
 class AvailableTimeslotSerializer(serializers.ModelSerializer):
     zoom_start_url = serializers.SerializerMethodField()
+    consultation_details = serializers.SerializerMethodField()
 
     class Meta:
         model = AvailableTimeslot
-        fields = "__all__"
+        fields = [
+            "id", "consultation", "consultation_details", "recurring_rule",
+            "scheduled_start", "scheduled_end", "is_booked",
+            "zoom_meeting_id", "zoom_join_url", "zoom_start_url",
+        ]
         read_only_fields = ["consultation", "zoom_meeting_id", "zoom_join_url", "zoom_start_url", "is_booked"]
 
     def get_zoom_start_url(self, obj):
@@ -32,6 +37,31 @@ class AvailableTimeslotSerializer(serializers.ModelSerializer):
         ):
             return obj.zoom_start_url
         return None
+
+    def get_consultation_details(self, obj):
+        c = obj.consultation
+        if not c:
+            return None
+        teacher = c.teacher
+        teacher_data = None
+        if teacher:
+            teacher_data = {
+                "id": teacher.id,
+                "name": f"{teacher.user.first_name} {teacher.user.last_name}".strip() or teacher.user.email,
+                "email": teacher.user.email,
+                "profile_picture": self.context.get("request").build_absolute_uri(teacher.profile_picture.url)
+                    if teacher.profile_picture and self.context.get("request") else (
+                        teacher.profile_picture.url if teacher.profile_picture else None
+                    ),
+                "professional_title": teacher.professional_title,
+                "about": teacher.about,
+            }
+        return {
+            "id": c.id,
+            "title": c.title,
+            "description": c.description,
+            "teacher": teacher_data,
+        }
 
 
 class ConsultationBundleSerializer(serializers.ModelSerializer):
