@@ -576,6 +576,30 @@ class QuizAttemptListSerializer(serializers.ModelSerializer):
         fields = ["id", "score", "passed", "created_at"]
 
 
+class QuizAttemptAdminSerializer(serializers.ModelSerializer):
+    student_email = serializers.EmailField(source="user.email", read_only=True)
+    student_name = serializers.SerializerMethodField()
+    quiz_title = serializers.CharField(source="quiz.title", read_only=True)
+    course_title = serializers.CharField(source="quiz.lesson.module.course.title", read_only=True)
+    passing_score = serializers.DecimalField(source="quiz.passing_score", max_digits=5, decimal_places=2, read_only=True)
+    total_questions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = QuizAttempt
+        fields = [
+            "id", "student_email", "student_name",
+            "quiz_title", "course_title",
+            "score", "passing_score", "passed", "total_questions",
+            "created_at",
+        ]
+
+    def get_student_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.email
+
+    def get_total_questions(self, obj):
+        return obj.quiz.questions.count()
+
+
 # ── Assignment Submission ────────────────────────────────────────────────────
 
 

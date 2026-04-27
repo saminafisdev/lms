@@ -50,6 +50,7 @@ from .serializers import (
     QuizSubmitSerializer,
     QuizAttemptResultSerializer,
     QuizAttemptListSerializer,
+    QuizAttemptAdminSerializer,
     AssignmentSubmissionCreateSerializer,
     AssignmentSubmissionReviewSerializer,
     AssignmentSubmissionSerializer,
@@ -1368,3 +1369,39 @@ class TeacherDashboardView(viewsets.ViewSet):
             ).data,
             "recent_uploads": recent_uploads,
         })
+
+
+class QuizAttemptAdminViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Admin/teacher viewset for reviewing quiz attempts.
+    GET  /quiz-attempts/        → list all (filters: quiz, course, passed, user, user__email)
+    GET  /quiz-attempts/{id}/   → detail
+    Teachers only see attempts for courses they teach.
+    """
+
+    serializer_class = QuizAttemptAdminSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = {
+        "quiz": ["exact"],
+        "quiz__lesson__module__course": ["exact"],
+        "passed": ["exact"],
+        "user": ["exact"],
+        "user__email": ["icontains", "exact"],
+        "user__first_name": ["icontains"],
+        "user__last_name": ["icontains"],
+    }
+    search_fields = ["user__email", "user__first_name", "user__last_name", "quiz__title"]
+    ordering_fields = ["created_at", "score"]
+    ordering = ["-created_at"]
+
+    def get_permissions(self):
+        return [IsAdminOrTeacher()]
+
+    def get_queryset(self):
+        qs = QuizAttempt.objects.select_related(
+            "user", "quiz__lesson__module__course"
+        )
+        # Teachers only see attempts for courses they teach
+        if self.request.user.role == "teacher":
+            qs = qs.filter(quiz__lesson__module__course__teacher=self.request.user)
+        return qs
