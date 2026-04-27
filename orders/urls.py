@@ -1,4 +1,4 @@
-from orders.views import BookSalesViewSet, LuluWebhookView
+from orders.views import BookSalesViewSet, LuluWebhookView, SalesViewSet
 from orders.views import StripeWebhookView
 from django.urls import path
 from .views import CartViewSet, OrderViewSet
@@ -19,6 +19,9 @@ book_sales_list = BookSalesViewSet.as_view({"get": "list"})
 book_sales_detail = BookSalesViewSet.as_view({"get": "retrieve"})
 book_sales_summary = BookSalesViewSet.as_view({"get": "summary"})
 
+sales_list = SalesViewSet.as_view({"get": "list"})
+sales_summary = SalesViewSet.as_view({"get": "summary"})
+
 urlpatterns = [
     # Cart
     path("cart/", cart_list, name="cart"),
@@ -35,6 +38,9 @@ urlpatterns = [
     path("orders/book-sales/", book_sales_list, name="book-sales-list"),
     path("orders/book-sales/summary/", book_sales_summary, name="book-sales-summary"),
     path("orders/book-sales/<int:pk>/", book_sales_detail, name="book-sales-detail"),
+    # Unified sales — admin only
+    path("orders/sales/", sales_list, name="sales-list"),
+    path("orders/sales/summary/", sales_summary, name="sales-summary"),
     # Stripe webhook
     path("orders/webhook/stripe/", StripeWebhookView.as_view(), name="stripe-webhook"),
     # Lulu webhook

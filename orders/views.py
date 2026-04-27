@@ -1,7 +1,6 @@
 import logging
 import stripe as stripe_lib
 
-logger = logging.getLogger(__name__)
 from django.conf import settings
 from django.db import models
 from django.utils.decorators import method_decorator
@@ -16,6 +15,9 @@ from config.pagination import StandardPagination
 from config.permissions import IsAdminRole
 from courses.models import Enrollment
 from config.tasks import send_email_task, create_zoom_meeting_for_slot_task, create_lulu_print_job_task
+from consultations.models import ConsultationPurchase
+from donations.models import Donation
+from memberships.models import UserMembership
 from orders.models import ShippingAddress
 from orders.lulu import calculate_shipping_cost
 from orders.serializers import BookSaleSerializer, UpdateFulfillmentSerializer
@@ -32,6 +34,7 @@ from .serializers import (
 )
 from .utils import already_owns
 
+logger = logging.getLogger(__name__)
 
 class CartViewSet(viewsets.ViewSet):
     """Unified cart — supports courses, bundles, digital books, and physical books."""
@@ -1161,6 +1164,298 @@ class BookSalesViewSet(viewsets.ViewSet):
                 "digital": {
                     "count": digital_stats["count"] or 0,
                     "revenue": digital_stats["revenue"] or 0,
+                },
+            }
+        )
+
+
+class SalesViewSet(viewsets.ViewSet):
+    """
+    Admin-only — unified sales dashboard across all revenue streams.
+    """
+
+    permission_classes = [IsAdminRole]
+
+    # ------------------------------------------------------------------ helpers
+
+    def _normalize_order_item(self, item):
+        order = item.order
+        if item.item_type == "course" and item.course:
+            product_name = item.course.title
+        elif item.item_type == "bundle" and item.bundle:
+            product_name = item.bundle.name
+        elif item.item_type in ("digital_book", "physical_book") and item.book:
+            product_name = item.book.title
+        else:
+            product_name = item.item_type
+
+        shipping = None
+        if hasattr(order, "shipping_address"):
+            sa = order.shipping_address
+            shipping = f"{sa.full_name}, {sa.address_line}, {sa.city}, {sa.country}"
+
+        return {
+            "id": f"order-item-{item.id}",
+            "type": item.item_type,
+            "product_name": product_name,
+            "student_email": order.user.email,
+            "student_name": f"{order.user.first_name} {order.user.last_name}".strip() or order.user.email,
+            "quantity": item.quantity,
+            "amount": str(item.total_price),
+            "payment_status": order.status,
+            "payment_reference": order.payment_reference,
+            "date": order.created_at.isoformat(),
+            "shipping_address": shipping,
+        }
+
+    def _normalize_consultation(self, cp):
+        return {
+            "id": f"consultation-{cp.id}",
+            "type": "consultation",
+            "product_name": cp.consultation.title,
+            "student_email": cp.student.email,
+            "student_name": f"{cp.student.first_name} {cp.student.last_name}".strip() or cp.student.email,
+            "quantity": cp.sessions_purchased,
+            "amount": str(cp.total_price_paid),
+            "payment_status": cp.status,
+            "payment_reference": cp.payment_reference,
+            "date": cp.created_at.isoformat(),
+            "shipping_address": None,
+        }
+
+    def _normalize_donation(self, donation):
+        return {
+            "id": f"donation-{donation.id}",
+            "type": "donation",
+            "product_name": "Donation",
+            "student_email": donation.email,
+            "student_name": f"{donation.first_name} {donation.last_name}".strip(),
+            "quantity": 1,
+            "amount": str(donation.amount),
+            "payment_status": donation.status,
+            "payment_reference": donation.stripe_reference,
+            "date": donation.created_at.isoformat(),
+            "shipping_address": None,
+        }
+
+    def _normalize_membership(self, um):
+        plan_name = um.plan.name if um.plan else "Membership"
+        amount = str(um.plan.price) if um.plan else "0"
+        return {
+            "id": f"membership-{um.id}",
+            "type": "membership",
+            "product_name": plan_name,
+            "student_email": um.user.email,
+            "student_name": f"{um.user.first_name} {um.user.last_name}".strip() or um.user.email,
+            "quantity": 1,
+            "amount": amount,
+            "payment_status": um.status,
+            "payment_reference": um.payment_reference,
+            "date": um.created_at.isoformat(),
+            "shipping_address": None,
+        }
+
+    # ------------------------------------------------------------------ views
+
+    @extend_schema(
+        responses={
+            200: inline_serializer(
+                name="SaleItem",
+                fields={
+                    "id": serializers.CharField(),
+                    "type": serializers.ChoiceField(
+                        choices=["course", "bundle", "digital_book", "physical_book", "consultation", "donation", "membership"]
+                    ),
+                    "product_name": serializers.CharField(),
+                    "student_email": serializers.EmailField(),
+                    "student_name": serializers.CharField(),
+                    "quantity": serializers.IntegerField(),
+                    "amount": serializers.DecimalField(max_digits=10, decimal_places=2),
+                    "payment_status": serializers.CharField(),
+                    "payment_reference": serializers.CharField(allow_null=True),
+                    "date": serializers.DateTimeField(),
+                    "shipping_address": serializers.CharField(allow_null=True),
+                },
+            )
+        },
+        parameters=[
+            inline_serializer(
+                name="SalesFilters",
+                fields={
+                    "type": serializers.CharField(required=False),
+                    "payment_status": serializers.CharField(required=False),
+                    "date_from": serializers.DateField(required=False),
+                    "date_to": serializers.DateField(required=False),
+                    "search": serializers.CharField(required=False),
+                },
+            )
+        ],
+    )
+    def list(self, request):
+        """
+        GET /orders/sales/
+        Unified paginated list of all sales: courses, bundles, books, consultations, donations, memberships.
+        Filters: type, payment_status, date_from, date_to, search (email/name/product).
+        """
+        sale_type = request.query_params.get("type")
+        payment_status = request.query_params.get("payment_status")
+        date_from = request.query_params.get("date_from")
+        date_to = request.query_params.get("date_to")
+        search = request.query_params.get("search", "").strip()
+
+        results = []
+
+        # --- OrderItems (course, bundle, digital_book, physical_book) ---
+        if not sale_type or sale_type in ("course", "bundle", "digital_book", "physical_book"):
+            oi_qs = (
+                OrderItem.objects.select_related(
+                    "order", "order__user", "order__shipping_address", "course", "bundle", "book"
+                )
+                .order_by("-order__created_at")
+            )
+            if sale_type:
+                oi_qs = oi_qs.filter(item_type=sale_type)
+            if payment_status:
+                oi_qs = oi_qs.filter(order__status=payment_status)
+            if date_from:
+                oi_qs = oi_qs.filter(order__created_at__date__gte=date_from)
+            if date_to:
+                oi_qs = oi_qs.filter(order__created_at__date__lte=date_to)
+            if search:
+                oi_qs = oi_qs.filter(
+                    models.Q(order__user__email__icontains=search)
+                    | models.Q(order__user__first_name__icontains=search)
+                    | models.Q(order__user__last_name__icontains=search)
+                    | models.Q(course__title__icontains=search)
+                    | models.Q(bundle__name__icontains=search)
+                    | models.Q(book__title__icontains=search)
+                )
+            results.extend(self._normalize_order_item(item) for item in oi_qs)
+
+        # --- ConsultationPurchases ---
+        if not sale_type or sale_type == "consultation":
+            cp_qs = (
+                ConsultationPurchase.objects.select_related("student", "consultation")
+                .order_by("-created_at")
+            )
+            if payment_status:
+                cp_qs = cp_qs.filter(status=payment_status)
+            if date_from:
+                cp_qs = cp_qs.filter(created_at__date__gte=date_from)
+            if date_to:
+                cp_qs = cp_qs.filter(created_at__date__lte=date_to)
+            if search:
+                cp_qs = cp_qs.filter(
+                    models.Q(student__email__icontains=search)
+                    | models.Q(student__first_name__icontains=search)
+                    | models.Q(student__last_name__icontains=search)
+                    | models.Q(consultation__title__icontains=search)
+                )
+            results.extend(self._normalize_consultation(cp) for cp in cp_qs)
+
+        # --- Donations ---
+        if not sale_type or sale_type == "donation":
+            don_qs = Donation.objects.order_by("-created_at")
+            if payment_status:
+                don_qs = don_qs.filter(status=payment_status)
+            if date_from:
+                don_qs = don_qs.filter(created_at__date__gte=date_from)
+            if date_to:
+                don_qs = don_qs.filter(created_at__date__lte=date_to)
+            if search:
+                don_qs = don_qs.filter(
+                    models.Q(email__icontains=search)
+                    | models.Q(first_name__icontains=search)
+                    | models.Q(last_name__icontains=search)
+                )
+            results.extend(self._normalize_donation(d) for d in don_qs)
+
+        # --- UserMemberships ---
+        if not sale_type or sale_type == "membership":
+            mem_qs = (
+                UserMembership.objects.select_related("user", "plan")
+                .order_by("-created_at")
+            )
+            if payment_status:
+                mem_qs = mem_qs.filter(status=payment_status)
+            if date_from:
+                mem_qs = mem_qs.filter(created_at__date__gte=date_from)
+            if date_to:
+                mem_qs = mem_qs.filter(created_at__date__lte=date_to)
+            if search:
+                mem_qs = mem_qs.filter(
+                    models.Q(user__email__icontains=search)
+                    | models.Q(user__first_name__icontains=search)
+                    | models.Q(user__last_name__icontains=search)
+                    | models.Q(plan__name__icontains=search)
+                )
+            results.extend(self._normalize_membership(um) for um in mem_qs)
+
+        # Sort merged results by date descending
+        results.sort(key=lambda x: x["date"], reverse=True)
+
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(results, request)
+        return paginator.get_paginated_response(page)
+
+    @extend_schema(responses={200: None})
+    @action(detail=False, methods=["get"], url_path="summary")
+    def summary(self, request):
+        """
+        GET /orders/sales/summary/
+        Revenue breakdown by sale type (completed/active payments only).
+        """
+        from django.db.models import Count, Sum
+
+        # Order items
+        oi_base = OrderItem.objects.filter(order__status="completed")
+        course_stats = oi_base.filter(item_type="course").aggregate(count=Count("id"), revenue=Sum("total_price"))
+        bundle_stats = oi_base.filter(item_type="bundle").aggregate(count=Count("id"), revenue=Sum("total_price"))
+        digital_stats = oi_base.filter(item_type="digital_book").aggregate(count=Count("id"), revenue=Sum("total_price"))
+        physical_stats = oi_base.filter(item_type="physical_book").aggregate(count=Count("id"), revenue=Sum("total_price"))
+
+        # Consultations
+        cp_stats = ConsultationPurchase.objects.filter(status="completed").aggregate(
+            count=Count("id"), revenue=Sum("total_price_paid")
+        )
+
+        # Donations
+        don_stats = Donation.objects.filter(status="completed").aggregate(
+            count=Count("id"), revenue=Sum("amount")
+        )
+
+        # Memberships (active = paid)
+        mem_stats = UserMembership.objects.filter(status__in=["active", "expired"]).aggregate(
+            count=Count("id"), revenue=Sum("plan__price")
+        )
+
+        def _fmt(stats, rev_key="revenue"):
+            return {
+                "count": stats["count"] or 0,
+                "revenue": str(stats[rev_key] or 0),
+            }
+
+        total_revenue = (
+            (course_stats["revenue"] or 0)
+            + (bundle_stats["revenue"] or 0)
+            + (digital_stats["revenue"] or 0)
+            + (physical_stats["revenue"] or 0)
+            + (cp_stats["revenue"] or 0)
+            + (don_stats["revenue"] or 0)
+            + (mem_stats["revenue"] or 0)
+        )
+
+        return Response(
+            {
+                "total_revenue": str(total_revenue),
+                "breakdown": {
+                    "course": _fmt(course_stats),
+                    "bundle": _fmt(bundle_stats),
+                    "digital_book": _fmt(digital_stats),
+                    "physical_book": _fmt(physical_stats),
+                    "consultation": _fmt(cp_stats),
+                    "donation": _fmt(don_stats),
+                    "membership": _fmt(mem_stats),
                 },
             }
         )
