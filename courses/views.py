@@ -445,11 +445,17 @@ class CourseCategoryViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         from django.core.cache import cache
+        cache.delete('course_categories')  # ensure fresh queryset for detail actions
+        return CourseCategory.objects.all()
+
+    def list(self, request, *args, **kwargs):
+        from django.core.cache import cache
         cached = cache.get('course_categories')
         if cached is None:
             cached = list(CourseCategory.objects.all())
-            cache.set('course_categories', cached, 60 * 60 * 24)  # 24 hours
-        return cached
+            cache.set('course_categories', cached, 60 * 60 * 24)
+        serializer = self.get_serializer(cached, many=True)
+        return Response(serializer.data)
 
     def _invalidate_category_cache(self):
         from django.core.cache import cache

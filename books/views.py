@@ -1,6 +1,7 @@
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from rest_framework import serializers as drf_serializers
@@ -18,11 +19,21 @@ class BookCategoryViewSet(viewsets.ModelViewSet):
     ViewSet for managing book categories.
     - Public: List and retrieve.
     - Admin: Full CRUD.
+    Supports lookup by either ID (integer) or slug (string).
     """
     queryset = BookCategory.objects.all()
     serializer_class = BookCategorySerializer
-    lookup_field = "slug"
     pagination_class = None
+
+    def get_object(self):
+        lookup = self.kwargs.get(self.lookup_field)
+        queryset = self.get_queryset()
+        if lookup and lookup.isdigit():
+            obj = get_object_or_404(queryset, pk=lookup)
+        else:
+            obj = get_object_or_404(queryset, slug=lookup)
+        self.check_object_permissions(self.request, obj)
+        return obj
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
