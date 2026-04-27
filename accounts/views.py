@@ -221,16 +221,38 @@ class StudentDashboardView(APIView):
             .order_by("-created_at")[:10]
         )
 
-        # Upcoming consultation sessions
-        upcoming_sessions = list(
+        # Upcoming consultation sessions — with purchase_id and pending reschedule info
+        upcoming_slots = list(
             AvailableTimeslot.objects.filter(
                 purchases__student=user,
                 purchases__status="completed",
                 scheduled_start__gte=now,
             )
             .select_related("consultation", "consultation__teacher", "consultation__teacher__user")
+            .prefetch_related("purchases")
             .order_by("scheduled_start")[:5]
         )
+
+        # Annotate each slot with purchase_id and pending reschedule request
+        from consultations.models import RescheduleRequest
+        slot_ids = [s.id for s in upcoming_slots]
+        pending_reschedules = {
+            rr.old_slot_id: {"reschedule_request_id": rr.id}
+            for rr in RescheduleRequest.objects.filter(
+                old_slot_id__in=slot_ids,
+                purchase__student=user,
+                status=RescheduleRequest.STATUS_PENDING,
+            ).only("id", "old_slot_id")
+        }
+
+        upcoming_sessions_data = []
+        for slot in upcoming_slots:
+            purchase = slot.purchases.filter(student=user, status="completed").first()
+            slot_data = AvailableTimeslotSerializer(slot, context={"request": request}).data
+            slot_data["purchase_id"] = purchase.id if purchase else None
+            pending = pending_reschedules.get(slot.id)
+            slot_data["pending_reschedule_request_id"] = pending["reschedule_request_id"] if pending else None
+            upcoming_sessions_data.append(slot_data)
 
         # Next live class from enrolled courses
         enrolled_course_ids = [e.course_id for e in enrollments]
@@ -257,7 +279,7 @@ class StudentDashboardView(APIView):
             "my_courses": EnrollmentSerializer(enrollments, many=True, context={"request": request}).data,
             "my_books": PurchasedBookSerializer(books, many=True, context={"request": request}).data,
             "my_orders": OrderSerializer(orders, many=True, context={"request": request}).data,
-            "upcoming_sessions": AvailableTimeslotSerializer(upcoming_sessions, many=True, context={"request": request}).data,
+            "upcoming_sessions": upcoming_sessions_data,
             "next_live_class": LessonSerializer(next_live, context={"request": request}).data if next_live else None,
         })
 
