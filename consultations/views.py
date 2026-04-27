@@ -293,7 +293,11 @@ class AvailableTimeslotViewSet(viewsets.ModelViewSet):
 
 class BundleViewSet(viewsets.ModelViewSet):
     serializer_class = ConsultationBundleSerializer
-    permission_classes = [IsAdminRole]
+
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [permissions.IsAuthenticated()]
+        return [IsAdminRole()]
 
     def get_queryset(self):
         queryset = Bundle.objects.all()
