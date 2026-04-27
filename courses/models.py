@@ -266,6 +266,10 @@ class Lesson(models.Model):
         blank=True, null=True, help_text="Text content or external link URL"
     )
     file_content = models.FileField(upload_to="lessons/files/", blank=True, null=True)
+    is_downloadable = models.BooleanField(
+        default=False,
+        help_text="If True, students can download the document file.",
+    )
     # URL to the hosted video (Bunny Stream CDN or any external video URL).
     # Admin pastes/sets this via the lesson form or API.
     video_content = models.URLField(max_length=1000, blank=True, default="")
