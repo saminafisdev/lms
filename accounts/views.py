@@ -430,6 +430,7 @@ class AdminDashboardView(APIView):
                 "instructor": instructor_name,
                 "scheduled_at": lesson.scheduled_at,
                 "zoom_join_url": lesson.zoom_join_url,
+                "zoom_start_url": lesson.zoom_start_url,
             })
 
         return Response({
