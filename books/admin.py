@@ -29,7 +29,7 @@ class BookAdmin(admin.ModelAdmin):
             "fields": ("title", "slug", "author", "category", "description", "cover_image")
         }),
         ("Details", {
-            "fields": ("isbn", "language", "publisher", "published_date", "number_of_pages")
+            "fields": ("isbn", "language", "publisher", "published_date", "page_count")
         }),
         ("Media", {
             "fields": ("sample_file", "video_url")

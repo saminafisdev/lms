@@ -41,8 +41,7 @@ class Book(models.Model):
     language = models.CharField(max_length=100)
     publisher = models.CharField(max_length=255)
     published_date = models.DateField()
-    number_of_pages = models.PositiveIntegerField()
-    
+
     # Media
     sample_file = models.FileField(
         upload_to="books/samples/", validators=[validate_pdf], blank=True, null=True,
@@ -59,10 +58,9 @@ class Book(models.Model):
     physical_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     stock_count = models.PositiveIntegerField(default=0)
 
-    # Lulu print-on-demand fields (only needed for physical books)
+    # Lulu print-on-demand / page info
     page_count = models.PositiveIntegerField(
-        blank=True, null=True,
-        help_text="Number of interior pages. Required for Lulu shipping cost calculation."
+        help_text="Number of interior pages. Also used for Lulu shipping cost calculation."
     )
     lulu_pod_package_id = models.CharField(
         max_length=100, blank=True, null=True,
