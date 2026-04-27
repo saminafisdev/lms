@@ -496,7 +496,8 @@ class OrderViewSet(viewsets.ViewSet):
                     )
 
         # Calculate Lulu shipping cost for physical books
-        shipping_cost = 0
+        from decimal import Decimal
+        shipping_cost = Decimal("0")
         shipping_level = serializer.validated_data.get("shipping_level", "MAIL")
         if has_physical:
             physical_items = [i for i in items if i.item_type == CartItem.ItemType.PHYSICAL_BOOK]
@@ -521,9 +522,9 @@ class OrderViewSet(viewsets.ViewSet):
                         phone_number=addr.get("phone", ""),
                         shipping_level=shipping_level,
                     )
-                    shipping_cost = float(
+                    shipping_cost = Decimal(str(
                         cost_result.get("shipping_cost", {}).get("total_cost_excl_tax", 0)
-                    )
+                    ))
                 except Exception as exc:
                     logger.warning("Lulu shipping cost fetch failed: %s", exc)
                     # Non-blocking — proceed without shipping cost if Lulu is unavailable
