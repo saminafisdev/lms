@@ -232,9 +232,48 @@ class RecurringAvailabilityViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         if "consultation_pk" in self.kwargs:
-            serializer.save(consultation_id=self.kwargs["consultation_pk"])
+            rule = serializer.save(consultation_id=self.kwargs["consultation_pk"])
         else:
-            serializer.save()
+            rule = serializer.save()
+        self._generate_timeslots(rule)
+
+    def perform_update(self, serializer):
+        rule = serializer.save()
+        from django.utils import timezone
+        AvailableTimeslot.objects.filter(
+            recurring_rule=rule,
+            is_booked=False,
+            scheduled_start__gte=timezone.now(),
+        ).delete()
+        self._generate_timeslots(rule)
+
+    def _generate_timeslots(self, rule):
+        from datetime import date, datetime, timedelta
+        from django.utils import timezone
+
+        today = date.today()
+        start_date = max(rule.valid_from, today)
+        end_date = rule.valid_until or (today + timedelta(weeks=8))
+
+        slots_to_create = []
+        current = start_date
+        while current <= end_date:
+            if current.weekday() == rule.weekday:
+                slot_start = timezone.make_aware(datetime.combine(current, rule.start_time))
+                slot_end = timezone.make_aware(datetime.combine(current, rule.end_time))
+                if not AvailableTimeslot.objects.filter(
+                    consultation=rule.consultation,
+                    scheduled_start=slot_start,
+                ).exists():
+                    slots_to_create.append(AvailableTimeslot(
+                        consultation=rule.consultation,
+                        scheduled_start=slot_start,
+                        scheduled_end=slot_end,
+                        recurring_rule=rule,
+                    ))
+            current += timedelta(days=1)
+
+        AvailableTimeslot.objects.bulk_create(slots_to_create)
 
 
 @extend_schema_view(
