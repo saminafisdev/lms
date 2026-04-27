@@ -213,11 +213,9 @@ class BookViewSet(viewsets.ModelViewSet):
     def read(self, request, slug=None):
         """
         GET /books/{slug}/read/
-        Returns a short-lived signed URL for reading the digital book in-browser.
-        The URL expires in 2 hours. Returns 403 if not purchased.
+        Returns the CDN URL for reading the digital book in-browser via PDF.js.
+        Returns 403 if not purchased.
         """
-        from config.bunny_storage import generate_bunny_signed_url
-
         book = self.get_object()
 
         if not book.has_digital:
@@ -238,12 +236,8 @@ class BookViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        expiry_seconds = 7200  # 2 hours
-        signed_url = generate_bunny_signed_url(book.digital_file.name, expiry_seconds)
-
         return Response({
-            "url": signed_url,
-            "expires_in": expiry_seconds,
+            "url": book.digital_file.url,
         })
 
     @extend_schema(
