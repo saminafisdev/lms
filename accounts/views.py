@@ -225,7 +225,7 @@ class StudentDashboardView(APIView):
         upcoming_sessions = list(
             AvailableTimeslot.objects.filter(
                 purchases__student=user,
-                purchases__status="confirmed",
+                purchases__status="completed",
                 scheduled_start__gte=now,
             )
             .select_related("consultation", "consultation__teacher", "consultation__teacher__user")
