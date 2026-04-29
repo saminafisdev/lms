@@ -20,8 +20,11 @@ class BlogAuthorSerializer(serializers.Serializer):
     full_name = serializers.SerializerMethodField()
     profile_picture = serializers.ImageField()
     professional_title = serializers.CharField(allow_null=True)
+    role = serializers.CharField(source="user.role")
 
     def get_full_name(self, obj):
+        if getattr(obj.user, "role", None) == "admin":
+            return "Admin"
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.email
 
 
