@@ -838,18 +838,11 @@ class LessonViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Mark a lesson as complete",
         description=(
-            "Marks the specified lesson as completed for the authenticated student.\n\n"
-            "**No request body required** — just POST to the endpoint.\n\n"
-            "**Access:** Student must be enrolled in the course or have an active membership.\n\n"
-            "**Auto-completion logic:**\n"
-            "- A `LessonCompletion` record is created for this student + lesson.\n"
-            "- After marking complete, the backend checks if all required lessons in the course are done.\n"
-            "- Required lessons are all non-live-session lessons where the student has passed any quiz "
-            "or had any assignment approved (if applicable).\n"
-            "- If all required lessons are complete, `Enrollment.is_completed` is set to `True` automatically.\n\n"
-            "**Note:** This endpoint is also triggered automatically when:\n"
-            "- A student **passes a quiz** (the quiz lesson is auto-marked complete).\n"
-            "- An admin **approves an assignment submission** (the assignment lesson is auto-marked complete)."
+            "Marks the lesson as completed for the authenticated student. "
+            "Requires course enrollment or an active membership.\n\n"
+            "After marking complete, the backend checks if all required lessons in the course are done "
+            "and automatically sets `Enrollment.is_completed = True` if so.\n\n"
+            "Also triggered automatically when a student passes a quiz or an admin approves an assignment."
         ),
         request=None,
         responses={
@@ -857,9 +850,9 @@ class LessonViewSet(viewsets.ModelViewSet):
                 name="LessonCompleteResponse",
                 fields={
                     "lesson_completed": drf_fields.BooleanField(),
-                    "already_completed": drf_fields.BooleanField(help_text="True if the lesson was already marked complete before this request."),
-                    "course_completed": drf_fields.BooleanField(help_text="True if all required lessons are now done and the course is marked complete."),
-                    "progress_percent": drf_fields.IntegerField(help_text="Percentage of required lessons completed (null for membership-only access)."),
+                    "already_completed": drf_fields.BooleanField(),
+                    "course_completed": drf_fields.BooleanField(),
+                    "progress_percent": drf_fields.IntegerField(),
                 },
             )
         },
