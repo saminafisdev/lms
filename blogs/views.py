@@ -3,7 +3,8 @@ from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
 
 from .models import Blog, BlogCategory
 from .serializers import (
@@ -126,9 +127,19 @@ class BlogViewSet(viewsets.ModelViewSet):
 
         return Response(data)
 
+    @extend_schema(
+        summary="List teacher's own blogs",
+        description="Returns all blogs authored by the authenticated teacher across all statuses.",
+        parameters=[
+            OpenApiParameter("search", OpenApiTypes.STR, description="Search in title, excerpt, and content."),
+            OpenApiParameter("status", OpenApiTypes.STR, description="Filter by status: `draft`, `pending`, or `published`."),
+            OpenApiParameter("category__slug", OpenApiTypes.STR, description="Filter by category slug."),
+            OpenApiParameter("ordering", OpenApiTypes.STR, description="Order by `created_at`, `-created_at` (default), or `title`."),
+        ],
+        responses={200: TeacherBlogSerializer(many=True)},
+    )
     @action(detail=False, methods=["get"], url_path="my-blogs")
     def my_blogs(self, request):
-        """Returns all blogs authored by the current teacher — all statuses."""
         teacher_profile = getattr(request.user, "teacher_profile", None)
         if teacher_profile is None:
             return Response(
