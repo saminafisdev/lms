@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -134,8 +135,31 @@ class BlogViewSet(viewsets.ModelViewSet):
                 {"detail": "No teacher profile found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        blogs = Blog.objects.filter(author=teacher_profile)
-        serializer = TeacherBlogSerializer(blogs, many=True, context={"request": request})
+        qs = Blog.objects.filter(author=teacher_profile)
+
+        # Filter
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        category_slug = request.query_params.get("category__slug")
+        if category_slug:
+            qs = qs.filter(category__slug=category_slug)
+
+        # Search
+        search = request.query_params.get("search")
+        if search:
+            qs = qs.filter(
+                Q(title__icontains=search) |
+                Q(excerpt__icontains=search) |
+                Q(content__icontains=search)            )
+
+        # Ordering
+        ordering = request.query_params.get("ordering", "-created_at")
+        if ordering.lstrip("-") in ("created_at", "title"):
+            qs = qs.order_by(ordering)
+
+        serializer = TeacherBlogSerializer(qs, many=True, context={"request": request})
         return Response(serializer.data)
 
     @action(detail=True, methods=["post"], url_path="approve")
