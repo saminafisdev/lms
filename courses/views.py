@@ -858,7 +858,7 @@ class LessonViewSet(viewsets.ModelViewSet):
         },
     )
     @action(detail=True, methods=["post"], url_path="complete")
-    def complete_lesson(self, request, pk=None):
+    def complete_lesson(self, request, pk=None, course_pk=None, module_pk=None):
         lesson = self.get_object()
 
         # Must be enrolled or have active membership
