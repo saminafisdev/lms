@@ -22,6 +22,7 @@ from .models import (
     QuizAttempt,
     QuizAnswer,
     AssignmentSubmission,
+    LessonCompletion,
 )
 from courses.models import Lesson as LessonModel
 
@@ -110,6 +111,7 @@ class LessonSerializer(serializers.ModelSerializer):
     quiz_details = QuizSerializer(read_only=True)
     assignment_details = AssignmentSerializer(read_only=True)
     is_accessible = serializers.SerializerMethodField()
+    is_completed = serializers.SerializerMethodField()
     live_status = serializers.SerializerMethodField()
     zoom_start_url = serializers.SerializerMethodField()
     bunny_embed_url = serializers.SerializerMethodField()
@@ -193,6 +195,13 @@ class LessonSerializer(serializers.ModelSerializer):
             has_membership
             or Enrollment.objects.filter(user=user, course=obj.module.course).exists()
         )
+
+    def get_is_completed(self, obj):
+        request = self.context.get("request")
+        user = request.user if request else None
+        if not user or not user.is_authenticated:
+            return False
+        return LessonCompletion.objects.filter(user=user, lesson=obj).exists()
 
     def get_is_accessible(self, obj):
         request = self.context.get("request")
