@@ -32,7 +32,7 @@ from .serializers import (
     DirectPurchaseSerializer,
     OrderSerializer,
 )
-from .utils import already_owns
+from .utils import already_owns, fulfill_order
 
 logger = logging.getLogger(__name__)
 
@@ -410,7 +410,7 @@ class OrderViewSet(viewsets.ViewSet):
         if price == 0:
             order.status = Order.PaymentStatus.COMPLETED
             order.save(update_fields=["status"])
-            self._fulfill_order(order)
+            fulfill_order(order)
             return Response(
                 {"order": OrderSerializer(order).data},
                 status=status.HTTP_201_CREATED,
@@ -591,7 +591,7 @@ class OrderViewSet(viewsets.ViewSet):
         if total == 0:
             order.status = Order.PaymentStatus.COMPLETED
             order.save(update_fields=["status"])
-            self._fulfill_order(order)
+            fulfill_order(order)
             return Response(
                 {"order": OrderSerializer(order).data},
                 status=status.HTTP_201_CREATED,
@@ -684,7 +684,7 @@ class StripeWebhookView(APIView):
                 return
             order.status = Order.PaymentStatus.COMPLETED
             order.save()
-            self._fulfill_order(order)
+            fulfill_order(order)
 
     def _handle_checkout_session_completed(self, session):
         """Fulfills purchases created via Stripe Checkout Sessions."""
@@ -720,7 +720,7 @@ class StripeWebhookView(APIView):
             return  # idempotency guard
         order.status = Order.PaymentStatus.COMPLETED
         order.save()
-        self._fulfill_order(order)
+        fulfill_order(order)
 
     def _handle_checkout_session_expired(self, session):
         """Marks the purchase as failed when the Stripe Checkout Session expires."""
@@ -887,101 +887,7 @@ class StripeWebhookView(APIView):
         Donation.objects.filter(id=donation_id).update(status=Donation.Status.COMPLETED)
 
     def _fulfill_order(self, order):
-        from django.db import transaction
-        with transaction.atomic():
-            for item in order.items.select_related("course", "bundle", "book").all():
-                if item.item_type == "physical_book":
-                    item.book.stock_count -= item.quantity
-                    item.book.save(update_fields=["stock_count"])
-                    # Dispatch Lulu print job (prints & ships to customer)
-                    if item.book.lulu_pod_package_id and item.book.digital_file:
-                        try:
-                            create_lulu_print_job_task.delay(item.id)
-                        except Exception as e:
-                            logger.error("Failed to queue Lulu task for OrderItem %s: %s", item.id, e)
-
-                elif item.item_type == "digital_book":
-                    send_email_task.delay(
-                        to_email=order.user.email,
-                        purpose="book_purchase",
-                        template_data={
-                            "first_name": order.user.first_name or "there",
-                            "book_title": item.book.title,
-                            "format": "Digital",
-                            "amount": str(order.total_amount),
-                        },
-                    )
-                    logger.info(
-                        "Queued book_purchase email to %s for book %s",
-                        order.user.email,
-                        item.book.title,
-                    )
-
-                elif item.item_type == "course":
-                    Enrollment.objects.get_or_create(user=order.user, course=item.course)
-                    send_email_task.delay(
-                        to_email=order.user.email,
-                        purpose="course_purchase",
-                        template_data={
-                            "first_name": order.user.first_name or "there",
-                            "course_name": item.course.title,
-                            "amount": str(order.total_amount),
-                        },
-                    )
-                    logger.info(
-                        "Queued course_purchase email to %s for course %s",
-                        order.user.email,
-                        item.course.title,
-                    )
-
-                elif item.item_type == "bundle":
-                    bundle = item.bundle
-                    courses = list(bundle.courses.all())
-                    for course in courses:
-                        Enrollment.objects.get_or_create(user=order.user, course=course)
-                    course_names = ", ".join(c.title for c in courses)
-                    send_email_task.delay(
-                        to_email=order.user.email,
-                        purpose="bundle_purchase",
-                        template_data={
-                            "first_name": order.user.first_name or "there",
-                            "bundle_name": bundle.name,
-                            "course_names": course_names,
-                            "amount": str(order.total_amount),
-                        },
-                    )
-                    logger.info(
-                        "Queued bundle_purchase email to %s for bundle %s",
-                        order.user.email,
-                        bundle.name,
-                    )
-
-            if order.order_type == Order.OrderType.CART:
-                # Clear cart after fulfillment
-                cart = Cart.objects.filter(user=order.user).first()
-                if cart:
-                    cart.items.all().delete()
-
-                # Send shipping notification only for physical items
-                physical_items = [
-                    i for i in order.items.all() if i.item_type == "physical_book"
-                ]
-                if physical_items:
-                    send_email_task.delay(
-                        to_email=order.user.email,
-                        purpose="book_purchase",
-                        template_data={
-                            "first_name": order.user.first_name or "there",
-                            "book_title": ", ".join(i.book.title for i in physical_items),
-                            "format": "Physical",
-                            "amount": str(order.total_amount),
-                        },
-                    )
-                    logger.info(
-                        "Queued physical book_purchase email to %s for order %s",
-                        order.user.email,
-                        order.id,
-                    )
+        fulfill_order(order)
 
 
 
