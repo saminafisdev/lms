@@ -32,6 +32,11 @@ STORAGES = {
     },
 }
 
+# Jazzmin ships Bootstrap JS with a .map sourcemap reference that isn't
+# included in its package — disable strict missing-file check to avoid
+# collectstatic failures.
+WHITENOISE_MANIFEST_STRICT = False
+
 # ---------------------------------------------------------------------------
 # Email — SendGrid
 # ---------------------------------------------------------------------------
