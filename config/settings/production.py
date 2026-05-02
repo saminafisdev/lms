@@ -28,7 +28,7 @@ STORAGES = {
         "BACKEND": "django_bunny.storage.BunnyStorage",
     },
     "staticfiles": {
-        "BACKEND": "config.storage.RelaxedManifestStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
 
