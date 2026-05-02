@@ -60,6 +60,13 @@ class Course(models.Model):
     preview_video = models.FileField(
         upload_to="courses/previews/", blank=True, null=True
     )
+    display_order = models.PositiveIntegerField(
+        default=0,
+        help_text="Controls the display order of courses. Lower numbers appear first.",
+    )
+
+    class Meta:
+        ordering = ["display_order", "-id"]
 
     def __str__(self):
         return self.title

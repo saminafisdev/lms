@@ -183,6 +183,35 @@ class CourseViewSet(viewsets.ModelViewSet):
 
         return Response(data)
 
+    @action(
+        detail=False,
+        methods=["patch"],
+        url_path="reorder",
+        permission_classes=[permissions.IsAdminUser],
+    )
+    def reorder(self, request):
+        """
+        PATCH /courses/reorder/
+        Body: [{"id": 5, "order": 1}, {"id": 2, "order": 2}, ...]
+        Admin-only. Updates display_order for each course in bulk.
+        """
+        items = request.data
+        if not isinstance(items, list):
+            return Response(
+                {"detail": "Expected a list of {id, order} objects."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        for item in items:
+            course_id = item.get("id")
+            order = item.get("order")
+            if course_id is None or order is None:
+                return Response(
+                    {"detail": "Each item must have 'id' and 'order'."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            Course.objects.filter(pk=course_id).update(display_order=order)
+        return Response({"status": "ok"})
+
     @action(detail=True, methods=["get"], url_path="certificate", permission_classes=[permissions.IsAuthenticated])
     def certificate(self, request, pk=None):
         """
