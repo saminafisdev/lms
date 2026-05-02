@@ -170,6 +170,11 @@ class BlogViewSet(viewsets.ModelViewSet):
         if ordering.lstrip("-") in ("created_at", "title"):
             qs = qs.order_by(ordering)
 
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = TeacherBlogSerializer(page, many=True, context={"request": request})
+            return self.get_paginated_response(serializer.data)
+
         serializer = TeacherBlogSerializer(qs, many=True, context={"request": request})
         return Response(serializer.data)
 
