@@ -1,6 +1,6 @@
 services:
   web:
-    build: .
+    image: ${DOCKERHUB_USERNAME}/sakeena-web:latest
     environment:
       APP_ROLE: web
     env_file:
@@ -14,8 +14,7 @@ services:
       - dokploy-network
 
   celery:
-    build: .
-    command: celery
+    image: ${DOCKERHUB_USERNAME}/sakeena-web:latest
     environment:
       APP_ROLE: celery
     env_file:
@@ -25,8 +24,7 @@ services:
       - dokploy-network
 
   beat:
-    build: .
-    command: beat
+    image: ${DOCKERHUB_USERNAME}/sakeena-web:latest
     environment:
       APP_ROLE: beat
     env_file:
