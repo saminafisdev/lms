@@ -52,8 +52,15 @@ class CustomUserSerializer(UserSerializer):
         fields = ("id", "email", "role", "first_name", "last_name", "joined_at")
 
 
+class TeacherProfileUpdateUserSerializer(serializers.ModelSerializer):
+    """Minimal user serializer for TeacherProfile updates — no password fields."""
+    class Meta:
+        model = User
+        fields = ("first_name", "last_name")
+
+
 class TeacherProfileSerializer(serializers.ModelSerializer):
-    user = CustomUserCreateSerializer()
+    user = CustomUserSerializer()
     courses = serializers.SerializerMethodField()
     consultations = serializers.SerializerMethodField()
 
@@ -74,6 +81,15 @@ class TeacherProfileSerializer(serializers.ModelSerializer):
             "consultations",
         ]
 
+    def get_fields(self):
+        fields = super().get_fields()
+        # Use create serializer (with password) only on creation
+        if self.instance is None:
+            fields["user"] = CustomUserCreateSerializer()
+        else:
+            fields["user"] = TeacherProfileUpdateUserSerializer()
+        return fields
+
     def get_courses(self, obj):
         from courses.serializers import CourseListSerializer
         return CourseListSerializer(
@@ -90,20 +106,25 @@ class TeacherProfileSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_data = validated_data.pop("user")
-
-        # Manually set the role to teacher
         user_data["role"] = User.TEACHER
-
-        # Signal will auto-create the profile, so just create the user
         user = User.objects.create_user(**user_data)
-
-        # Update the profile created by the signal with the remaining fields
         teacher_profile = user.teacher_profile
         for attr, value in validated_data.items():
             setattr(teacher_profile, attr, value)
         teacher_profile.save()
-
         return teacher_profile
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop("user", {})
+        if user_data:
+            user = instance.user
+            for attr, value in user_data.items():
+                setattr(user, attr, value)
+            user.save()
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
 
 
 class CourseTeacherSerializer(serializers.ModelSerializer):
