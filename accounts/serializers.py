@@ -56,7 +56,8 @@ class TeacherProfileUpdateUserSerializer(serializers.ModelSerializer):
     """Minimal user serializer for TeacherProfile updates — no password fields."""
     class Meta:
         model = User
-        fields = ("first_name", "last_name")
+        fields = ("id", "email", "first_name", "last_name")
+        read_only_fields = ("id", "email")
 
 
 class TeacherProfileSerializer(serializers.ModelSerializer):
