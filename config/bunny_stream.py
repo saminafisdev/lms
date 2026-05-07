@@ -1,10 +1,14 @@
+import hashlib
 import logging
+import time
+
 import requests
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
 BUNNY_STREAM_BASE = "https://video.bunnycdn.com/library"
+BUNNY_TUS_ENDPOINT = "https://video.bunnycdn.com/tusupload"
 
 
 def _headers():
@@ -17,17 +21,39 @@ def _headers():
 
 def create_video(title: str) -> dict:
     """
-    Create a video entry in Bunny Stream and return upload credentials.
-    Returns: {video_id, upload_url}
+    Create a video entry in Bunny Stream and return the video_id.
+    Returns: {video_id}
     """
     library_id = settings.BUNNY_STREAM_LIBRARY_ID
     url = f"{BUNNY_STREAM_BASE}/{library_id}/videos"
     resp = requests.post(url, json={"title": title}, headers=_headers(), timeout=15)
     resp.raise_for_status()
     data = resp.json()
-    video_id = data["guid"]
-    upload_url = f"{BUNNY_STREAM_BASE}/{library_id}/videos/{video_id}"
-    return {"video_id": video_id, "upload_url": upload_url}
+    return {"video_id": data["guid"]}
+
+
+def generate_tus_credentials(video_id: str, title: str, expires_in: int = 86400) -> dict:
+    """
+    Generate presigned TUS upload credentials for direct browser-to-Bunny upload.
+    The API key is never exposed to the frontend — only the HMAC signature is returned.
+
+    Returns: {tus_endpoint, video_id, library_id, expiration_time, signature, title}
+    """
+    library_id = str(settings.BUNNY_STREAM_LIBRARY_ID)
+    api_key = settings.BUNNY_STREAM_API_KEY
+    expiration_time = int(time.time()) + expires_in
+
+    signature_string = f"{library_id}{api_key}{expiration_time}{video_id}"
+    signature = hashlib.sha256(signature_string.encode()).hexdigest()
+
+    return {
+        "tus_endpoint": BUNNY_TUS_ENDPOINT,
+        "video_id": video_id,
+        "library_id": library_id,
+        "expiration_time": expiration_time,
+        "signature": signature,
+        "title": title,
+    }
 
 
 def get_video(video_id: str) -> dict:

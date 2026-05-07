@@ -674,7 +674,7 @@ class LessonViewSet(viewsets.ModelViewSet):
         # Auto-initialize Bunny video entry for video-type lessons
         if lesson.content_type == "video":
             try:
-                from config.bunny_stream import create_video
+                from config.bunny_stream import create_video, generate_tus_credentials
                 result = create_video(lesson.title)
                 video_id = result["video_id"]
                 embed_url = (
@@ -685,15 +685,14 @@ class LessonViewSet(viewsets.ModelViewSet):
                 lesson.bunny_video_status = "created"
                 lesson.video_content = embed_url
                 lesson.save(update_fields=["bunny_video_id", "bunny_video_status", "video_content"])
+                tus_creds = generate_tus_credentials(video_id, lesson.title)
                 response_data = dict(response_data)
                 response_data["video_upload"] = {
                     "video_id": video_id,
-                    "upload_url": result["upload_url"],
-                    "upload_method": "PUT",
-                    "upload_headers": {
-                        "AccessKey": settings.BUNNY_STREAM_API_KEY,
-                        "Content-Type": "video/*",
-                    },
+                    "tus_endpoint": tus_creds["tus_endpoint"],
+                    "tus_library_id": tus_creds["library_id"],
+                    "tus_expiration_time": tus_creds["expiration_time"],
+                    "tus_signature": tus_creds["signature"],
                 }
             except Exception as e:
                 # Don't fail lesson creation if Bunny is unreachable; admin can retry via POST /video/
@@ -815,8 +814,7 @@ class LessonViewSet(viewsets.ModelViewSet):
         })
 
     def _init_video(self, request, lesson):
-        from config.bunny_stream import create_video, delete_video
-        # Replace existing video if one exists
+        from config.bunny_stream import create_video, delete_video, generate_tus_credentials
         if lesson.bunny_video_id:
             delete_video(lesson.bunny_video_id)
 
@@ -837,17 +835,19 @@ class LessonViewSet(viewsets.ModelViewSet):
         lesson.video_content = embed_url
         lesson.save(update_fields=["bunny_video_id", "bunny_video_status", "video_content"])
 
+        tus_creds = generate_tus_credentials(video_id, title)
+
         return Response({
             "video_id": video_id,
-            "video_content": embed_url,       # already saved on lesson; frontend can use immediately once status=ready
-            # PUT the raw video file directly to this URL (do NOT send to our server)
-            "upload_url": result["upload_url"],
-            "upload_method": "PUT",
-            "upload_headers": {
-                "AccessKey": settings.BUNNY_STREAM_API_KEY,
-                "Content-Type": "video/*",
-            },
+            "video_content": embed_url,
+            # TUS credentials — use tus-js-client on the frontend for progress tracking
+            # Never expose BUNNY_STREAM_API_KEY to the browser; use these signed creds instead
+            "tus_endpoint": tus_creds["tus_endpoint"],
+            "tus_library_id": tus_creds["library_id"],
+            "tus_expiration_time": tus_creds["expiration_time"],
+            "tus_signature": tus_creds["signature"],
         }, status=status.HTTP_201_CREATED)
+
 
     def _delete_video(self, lesson):
         if not lesson.bunny_video_id:
