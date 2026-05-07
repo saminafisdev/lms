@@ -328,6 +328,7 @@ class CourseListSerializer(SlugMixin, serializers.ModelSerializer):
             "level",
             "status",
             "is_active",
+            "display_order",
             "category",
             "teacher",
             "total_lessons",
