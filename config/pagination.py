@@ -8,6 +8,11 @@ class StandardPagination(PageNumberPagination):
     page_size_query_param = "page_size"
     max_page_size = 100
 
+    def paginate_queryset(self, queryset, request, view=None):
+        if request.query_params.get("no_page") == "1":
+            return None
+        return super().paginate_queryset(queryset, request, view)
+
     def get_paginated_response(self, data):
         return Response(
             {
