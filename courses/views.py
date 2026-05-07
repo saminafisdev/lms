@@ -117,7 +117,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             base_qs = Course.objects.select_related(
                 "category", "teacher", "teacher__user"
-            ).annotate(total_lessons_count=Count('modules__lessons', distinct=True))
+            ).annotate(total_lessons_count=Count('modules__lessons', distinct=True)).order_by("display_order", "-id")
         else:
             base_qs = Course.objects.select_related(
                 "category", "teacher", "teacher__user"
