@@ -307,7 +307,17 @@ class ReplyViewSet(viewsets.ModelViewSet):
         if post.is_closed and self.request.user.role != "admin":
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("This discussion is closed.")
-        serializer.save(post=post, author=self.request.user)
+        reply = serializer.save(post=post, author=self.request.user)
+        # Notify the post author (if they didn't reply to their own post)
+        if post.author != self.request.user:
+            from notifications.utils import notify
+            notify(
+                recipient=post.author,
+                notification_type="discussion_reply",
+                title=f"{self.request.user.get_full_name() or self.request.user.email} replied to your post",
+                message=post.title,
+                link=f"/courses/{course.slug}/discussions/{post.pk}/",
+            )
 
     def update(self, request, *args, **kwargs):
         reply = self.get_object()

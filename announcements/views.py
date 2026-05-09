@@ -48,7 +48,22 @@ class CourseAnnouncementViewSet(
 
     def perform_create(self, serializer):
         course = self.get_course()
-        serializer.save(course=course, created_by=self.request.user)
+        announcement = serializer.save(course=course, created_by=self.request.user)
+        # Notify all enrolled students
+        from notifications.utils import notify_bulk
+        from courses.models import Enrollment
+        enrolled_users = list(
+            Enrollment.objects.filter(course=course).select_related("user").values_list("user", flat=True)
+        )
+        from accounts.models import User
+        recipients = User.objects.filter(pk__in=enrolled_users)
+        notify_bulk(
+            recipients=recipients,
+            notification_type="announcement",
+            title=f"New announcement in {course.title}",
+            message=announcement.title,
+            link=f"/courses/{course.slug}/announcements/",
+        )
 
 
 class SiteAnnouncementViewSet(viewsets.ModelViewSet):
