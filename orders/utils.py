@@ -71,7 +71,16 @@ def fulfill_order(order):
                 logger.info("Queued book_purchase email to %s for book %s", order.user.email, item.book.title)
 
             elif item.item_type == "course":
-                Enrollment.objects.get_or_create(user=order.user, course=item.course)
+                enrollment, created = Enrollment.objects.get_or_create(user=order.user, course=item.course)
+                if created:
+                    from notifications.utils import notify
+                    notify(
+                        recipient=order.user,
+                        notification_type="enrollment",
+                        title=f"You're enrolled in {item.course.title}",
+                        message="You now have full access to the course content.",
+                        link=f"/courses/{item.course.slug}/",
+                    )
                 send_email_task.delay(
                     to_email=order.user.email,
                     purpose="course_purchase",
@@ -87,7 +96,16 @@ def fulfill_order(order):
                 bundle = item.bundle
                 courses = list(bundle.courses.all())
                 for course in courses:
-                    Enrollment.objects.get_or_create(user=order.user, course=course)
+                    enrollment, created = Enrollment.objects.get_or_create(user=order.user, course=course)
+                    if created:
+                        from notifications.utils import notify
+                        notify(
+                            recipient=order.user,
+                            notification_type="enrollment",
+                            title=f"You're enrolled in {course.title}",
+                            message=f"Included in your {bundle.name} bundle purchase.",
+                            link=f"/courses/{course.slug}/",
+                        )
                 course_names = ", ".join(c.title for c in courses)
                 send_email_task.delay(
                     to_email=order.user.email,

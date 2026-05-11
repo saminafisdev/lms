@@ -299,14 +299,22 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.is_staff or user.role == "admin":
             # Admin can enroll any user; default to self if user not specified
-            serializer.save()
-            return
-        # Students can self-enroll only with an active membership
-        has_membership = hasattr(user, "membership") and user.membership.is_currently_active
-        if not has_membership:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("An active membership is required to enroll for free.")
-        serializer.save(user=user)
+            enrollment = serializer.save()
+        else:
+            # Students can self-enroll only with an active membership
+            has_membership = hasattr(user, "membership") and user.membership.is_currently_active
+            if not has_membership:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("An active membership is required to enroll for free.")
+            enrollment = serializer.save(user=user)
+        from notifications.utils import notify
+        notify(
+            recipient=enrollment.user,
+            notification_type="enrollment",
+            title=f"You're enrolled in {enrollment.course.title}",
+            message="You now have full access to the course content.",
+            link=f"/courses/{enrollment.course.slug}/",
+        )
 
 
 class BundleViewSet(viewsets.ModelViewSet):
@@ -1190,6 +1198,17 @@ class AssignmentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         submission = serializer.save(reviewed_by=request.user, reviewed_at=timezone.now())
+
+        # Notify the student their assignment was graded
+        from notifications.utils import notify
+        status_label = "approved" if submission.status == AssignmentSubmission.Status.APPROVED else "rejected"
+        notify(
+            recipient=submission.user,
+            notification_type="assignment_graded",
+            title=f"Your assignment was {status_label}",
+            message=submission.assignment.title,
+            link=f"/courses/{submission.assignment.lesson.module.course.slug}/assignments/{submission.assignment.pk}/",
+        )
 
         # If approved, check for course completion
         if submission.status == AssignmentSubmission.Status.APPROVED:
