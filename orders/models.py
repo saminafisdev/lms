@@ -1,8 +1,40 @@
+from decimal import Decimal
 from django.db import models
+from django.utils import timezone
 
 from accounts.models import User
 from books.models import Book
 from courses.models import Bundle, Course
+
+
+class Coupon(models.Model):
+    class DiscountType(models.TextChoices):
+        PERCENTAGE = "percentage", "Percentage"
+        FIXED = "fixed", "Fixed Amount"
+
+    code = models.CharField(max_length=50, unique=True)
+    discount_type = models.CharField(max_length=10, choices=DiscountType.choices)
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2)
+    is_active = models.BooleanField(default=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.code} ({self.discount_type}: {self.discount_value})"
+
+    def is_valid(self):
+        if not self.is_active:
+            return False
+        if self.expires_at and self.expires_at < timezone.now():
+            return False
+        return True
+
+    def calculate_discount(self, total: Decimal) -> Decimal:
+        total = Decimal(str(total))
+        if self.discount_type == self.DiscountType.PERCENTAGE:
+            return round(total * self.discount_value / 100, 2)
+        return min(Decimal(str(self.discount_value)), total)
+
 
 
 class Cart(models.Model):
@@ -99,6 +131,10 @@ class Order(models.Model):
         choices=FulfillmentStatus.choices,
         default=FulfillmentStatus.NOT_APPLICABLE,
     )
+    coupon = models.ForeignKey(
+        Coupon, null=True, blank=True, on_delete=models.SET_NULL, related_name="orders"
+    )
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     payment_reference = models.CharField(max_length=255, blank=True, null=True)

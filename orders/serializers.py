@@ -3,8 +3,21 @@ from rest_framework import serializers
 from books.serializers import PublicBookSerializer
 from courses.serializers import SimpleCourseSerializer
 
-from .models import Cart, CartItem, Order, OrderItem, ShippingAddress
+from .models import Cart, CartItem, Coupon, Order, OrderItem, ShippingAddress
 from .utils import already_owns
+
+
+class CouponSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Coupon
+        fields = ["id", "code", "discount_type", "discount_value", "is_active", "expires_at", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
+class CouponValidateSerializer(serializers.Serializer):
+    """Validate a coupon code against a given cart total."""
+    code = serializers.CharField()
+    total = serializers.DecimalField(max_digits=10, decimal_places=2)
 
 
 class CartItemReadSerializer(serializers.ModelSerializer):
@@ -193,6 +206,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     shipping_address = ShippingAddressSerializer(read_only=True)
+    coupon_code = serializers.CharField(source="coupon.code", read_only=True, allow_null=True)
 
     class Meta:
         model = Order
@@ -201,6 +215,8 @@ class OrderSerializer(serializers.ModelSerializer):
             "order_type",
             "status",
             "fulfillment_status",
+            "coupon_code",
+            "discount_amount",
             "total_amount",
             "shipping_cost",
             "items",
@@ -231,6 +247,7 @@ class DirectPurchaseSerializer(serializers.Serializer):
     )
     item_type = serializers.ChoiceField(choices=ITEM_TYPE_CHOICES)
     object_id = serializers.IntegerField()
+    coupon_code = serializers.CharField(required=False, allow_blank=True, default="")
 
     def validate(self, data):
         from books.models import Book
@@ -316,6 +333,7 @@ class CartCheckoutSerializer(serializers.Serializer):
     shipping_level = serializers.ChoiceField(
         choices=SHIPPING_LEVEL_CHOICES, default="MAIL", required=False
     )
+    coupon_code = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class BookSaleSerializer(serializers.ModelSerializer):
