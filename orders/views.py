@@ -23,18 +23,33 @@ from orders.lulu import calculate_shipping_cost
 from orders.serializers import BookSaleSerializer, UpdateFulfillmentSerializer
 from orders.stripe import construct_webhook_event, create_checkout_session, create_payment_intent
 
-from .models import Cart, CartItem, Order, OrderItem
+from .models import Cart, CartItem, Coupon, Order, OrderItem
 from .serializers import (
     AddToCartSerializer,
     CartCheckoutSerializer,
     CartItemReadSerializer,
     CartSerializer,
+    CouponSerializer,
+    CouponValidateSerializer,
     DirectPurchaseSerializer,
     OrderSerializer,
 )
 from .utils import already_owns, fulfill_order
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_coupon(coupon_code: str):
+    """Return (coupon, error_str). coupon is None if code blank or invalid."""
+    if not coupon_code:
+        return None, None
+    try:
+        coupon = Coupon.objects.get(code__iexact=coupon_code.strip())
+    except Coupon.DoesNotExist:
+        return None, "Invalid coupon code."
+    if not coupon.is_valid():
+        return None, "This coupon is expired or inactive."
+    return coupon, None
 
 class CartViewSet(viewsets.ViewSet):
     """Unified cart — supports courses, bundles, digital books, and physical books."""
@@ -305,6 +320,36 @@ class CartViewSet(viewsets.ViewSet):
             }
         )
 
+    @extend_schema(
+        request=CouponValidateSerializer,
+        responses={200: None},
+        summary="Validate a coupon code",
+        description="Check if a coupon is valid and preview the discount amount and discounted total.",
+    )
+    @action(detail=False, methods=["post"], url_path="validate-coupon")
+    def validate_coupon(self, request):
+        """POST /cart/validate-coupon/ — validate a coupon and preview the discount."""
+        serializer = CouponValidateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        code = serializer.validated_data["code"]
+        total = serializer.validated_data["total"]
+
+        coupon, error = _resolve_coupon(code)
+        if error:
+            return Response({"valid": False, "error": error}, status=status.HTTP_400_BAD_REQUEST)
+
+        from decimal import Decimal
+        discount = coupon.calculate_discount(total)
+        discounted_total = max(Decimal("0"), Decimal(str(total)) - discount)
+        return Response({
+            "valid": True,
+            "code": coupon.code,
+            "discount_type": coupon.discount_type,
+            "discount_value": str(coupon.discount_value),
+            "discount_amount": str(discount),
+            "discounted_total": str(discounted_total),
+        })
+
 
 class OrderViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -385,11 +430,23 @@ class OrderViewSet(viewsets.ViewSet):
         obj = serializer.validated_data["object"]
         price = serializer.validated_data["price"]
 
+        # Resolve coupon
+        coupon_code = serializer.validated_data.get("coupon_code", "")
+        coupon, coupon_error = _resolve_coupon(coupon_code)
+        if coupon_error:
+            return Response({"error": coupon_error}, status=status.HTTP_400_BAD_REQUEST)
+
+        from decimal import Decimal
+        discount_amount = coupon.calculate_discount(price) if coupon else Decimal("0")
+        final_price = max(Decimal("0"), Decimal(str(price)) - discount_amount)
+
         order = Order.objects.create(
             user=request.user,
             order_type=Order.OrderType.DIRECT,
             status=Order.PaymentStatus.PENDING,
-            total_amount=price,
+            coupon=coupon,
+            discount_amount=discount_amount,
+            total_amount=final_price,
         )
 
         course = obj if item_type == "course" else None
@@ -403,11 +460,11 @@ class OrderViewSet(viewsets.ViewSet):
             bundle=bundle,
             book=book,
             unit_price=price,
-            total_price=price,
+            total_price=final_price,
         )
 
-        # Free item (100% scholarship or free course/book) — skip Stripe entirely
-        if price == 0:
+        # Free item (100% scholarship, free course/book, or 100% coupon) — skip Stripe entirely
+        if final_price == 0:
             order.status = Order.PaymentStatus.COMPLETED
             order.save(update_fields=["status"])
             fulfill_order(order)
@@ -421,7 +478,7 @@ class OrderViewSet(viewsets.ViewSet):
             line_items=[{
                 "price_data": {
                     "currency": settings.CURRENCY,
-                    "unit_amount": int(price * 100),
+                    "unit_amount": int(final_price * 100),
                     "product_data": {"name": obj.name if item_type == "bundle" else obj.title},
                 },
                 "quantity": 1,
@@ -530,6 +587,16 @@ class OrderViewSet(viewsets.ViewSet):
                     # Non-blocking — proceed without shipping cost if Lulu is unavailable
 
         total = cart.get_total() + shipping_cost
+
+        # Resolve coupon
+        coupon_code = serializer.validated_data.get("coupon_code", "")
+        coupon, coupon_error = _resolve_coupon(coupon_code)
+        if coupon_error:
+            return Response({"error": coupon_error}, status=status.HTTP_400_BAD_REQUEST)
+
+        discount_amount = coupon.calculate_discount(total) if coupon else Decimal("0")
+        final_total = max(Decimal("0"), total - discount_amount)
+
         fulfillment_status = (
             Order.FulfillmentStatus.PROCESSING
             if has_physical
@@ -539,7 +606,9 @@ class OrderViewSet(viewsets.ViewSet):
             user=request.user,
             order_type=Order.OrderType.CART,
             status=Order.PaymentStatus.PENDING,
-            total_amount=total,
+            coupon=coupon,
+            discount_amount=discount_amount,
+            total_amount=final_total,
             shipping_cost=shipping_cost,
             fulfillment_status=fulfillment_status,
         )
@@ -587,8 +656,19 @@ class OrderViewSet(viewsets.ViewSet):
                 "quantity": 1,
             })
 
-        # Free cart (e.g. 100% scholarship applied prior) — skip Stripe
-        if total == 0:
+        # Add coupon discount as a negative line item so Stripe total matches
+        if discount_amount > 0:
+            stripe_line_items.append({
+                "price_data": {
+                    "currency": settings.CURRENCY,
+                    "unit_amount": -int(discount_amount * 100),
+                    "product_data": {"name": f"Discount ({coupon.code})"},
+                },
+                "quantity": 1,
+            })
+
+        # Free cart — skip Stripe
+        if final_total == 0:
             order.status = Order.PaymentStatus.COMPLETED
             order.save(update_fields=["status"])
             fulfill_order(order)
@@ -1392,3 +1472,10 @@ class SalesViewSet(viewsets.ViewSet):
                 },
             }
         )
+
+
+class CouponViewSet(viewsets.ModelViewSet):
+    """Admin CRUD for coupons. GET list/detail is admin-only."""
+    serializer_class = CouponSerializer
+    queryset = Coupon.objects.all().order_by("-created_at")
+    permission_classes = [IsAdminRole]
