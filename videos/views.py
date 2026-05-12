@@ -94,7 +94,7 @@ class VideoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         teacher_profile = getattr(user, "teacher_profile", None)
 
-        if teacher_profile is None:
+        if teacher_profile is None and user.role != "admin":
             from rest_framework.exceptions import ValidationError
             raise ValidationError(
                 "You need a teacher profile to author videos. Contact the platform owner."
