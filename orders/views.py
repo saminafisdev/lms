@@ -5,7 +5,12 @@ from django.conf import settings
 from django.db import models
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from drf_spectacular.utils import (
+    extend_schema,
+    inline_serializer,
+    OpenApiResponse,
+    OpenApiParameter,
+)
 from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -14,14 +19,22 @@ from rest_framework.views import APIView
 from config.pagination import StandardPagination
 from config.permissions import IsAdminRole
 from courses.models import Enrollment
-from config.tasks import send_email_task, create_zoom_meeting_for_slot_task, create_lulu_print_job_task
+from config.tasks import (
+    send_email_task,
+    create_zoom_meeting_for_slot_task,
+    create_lulu_print_job_task,
+)
 from consultations.models import ConsultationPurchase
 from donations.models import Donation
 from memberships.models import UserMembership
 from orders.models import ShippingAddress
 from orders.lulu import calculate_shipping_cost
 from orders.serializers import BookSaleSerializer, UpdateFulfillmentSerializer
-from orders.stripe import construct_webhook_event, create_checkout_session, create_payment_intent
+from orders.stripe import (
+    construct_webhook_event,
+    create_checkout_session,
+    create_payment_intent,
+)
 
 from .models import Cart, CartItem, Coupon, Order, OrderItem
 from .serializers import (
@@ -51,6 +64,7 @@ def _resolve_coupon(coupon_code: str):
         return None, "This coupon is expired or inactive."
     return coupon, None
 
+
 class CartViewSet(viewsets.ViewSet):
     """Unified cart — supports courses, bundles, digital books, and physical books."""
 
@@ -71,7 +85,9 @@ class CartViewSet(viewsets.ViewSet):
     def create(self, request):
         """POST /cart/items/ — add any product to cart."""
         cart = self.get_or_create_cart(request.user)
-        serializer = AddToCartSerializer(data=request.data, context={"request": request})
+        serializer = AddToCartSerializer(
+            data=request.data, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
 
         item_type = serializer.validated_data["item_type"]
@@ -80,7 +96,12 @@ class CartViewSet(viewsets.ViewSet):
 
         course = obj if item_type == CartItem.ItemType.COURSE else None
         bundle = obj if item_type == CartItem.ItemType.BUNDLE else None
-        book = obj if item_type in (CartItem.ItemType.DIGITAL_BOOK, CartItem.ItemType.PHYSICAL_BOOK) else None
+        book = (
+            obj
+            if item_type
+            in (CartItem.ItemType.DIGITAL_BOOK, CartItem.ItemType.PHYSICAL_BOOK)
+            else None
+        )
 
         # Enforce one item per product per type in cart
         existing = CartItem.objects.filter(
@@ -174,28 +195,51 @@ class CartViewSet(viewsets.ViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
-        request=inline_serializer("ShippingEstimateRequestSerializer", fields={
-            "country_code": serializers.CharField(help_text="2-letter ISO country code (e.g. 'US', 'GB', 'KW')"),
-            "city": serializers.CharField(help_text="City name"),
-            "street1": serializers.CharField(help_text="Street address line 1"),
-            "postal_code": serializers.CharField(help_text="Postal / ZIP code"),
-            "phone": serializers.CharField(help_text="Phone number (e.g. '+15551234567')"),
-            "state_code": serializers.CharField(required=False, help_text="State/province code (e.g. 'NY'). Required for US/CA."),
-            "shipping_level": serializers.ChoiceField(
-                choices=["MAIL", "PRIORITY_MAIL", "GROUND", "EXPEDITED", "EXPRESS"],
-                default="MAIL",
-                help_text="Lulu shipping speed level",
-            ),
-        }),
+        request=inline_serializer(
+            "ShippingEstimateRequestSerializer",
+            fields={
+                "country_code": serializers.CharField(
+                    help_text="2-letter ISO country code (e.g. 'US', 'GB', 'KW')"
+                ),
+                "city": serializers.CharField(help_text="City name"),
+                "street1": serializers.CharField(help_text="Street address line 1"),
+                "postal_code": serializers.CharField(help_text="Postal / ZIP code"),
+                "phone": serializers.CharField(
+                    help_text="Phone number (e.g. '+15551234567')"
+                ),
+                "state_code": serializers.CharField(
+                    required=False,
+                    help_text="State/province code (e.g. 'NY'). Required for US/CA.",
+                ),
+                "shipping_level": serializers.ChoiceField(
+                    choices=["MAIL", "PRIORITY_MAIL", "GROUND", "EXPEDITED", "EXPRESS"],
+                    default="MAIL",
+                    help_text="Lulu shipping speed level",
+                ),
+            },
+        ),
         responses={
-            200: inline_serializer("ShippingEstimateResponseSerializer", fields={
-                "country_code": serializers.CharField(),
-                "shipping_level": serializers.CharField(),
-                "shipping_cost": serializers.DecimalField(max_digits=10, decimal_places=2, help_text="Shipping cost excluding tax (USD)"),
-                "shipping_cost_incl_tax": serializers.DecimalField(max_digits=10, decimal_places=2, help_text="Shipping cost including tax (USD)"),
-                "currency": serializers.CharField(),
-            }),
-            400: OpenApiResponse(description="No physical books in cart, missing fields, or invalid country_code"),
+            200: inline_serializer(
+                "ShippingEstimateResponseSerializer",
+                fields={
+                    "country_code": serializers.CharField(),
+                    "shipping_level": serializers.CharField(),
+                    "shipping_cost": serializers.DecimalField(
+                        max_digits=10,
+                        decimal_places=2,
+                        help_text="Shipping cost excluding tax (USD)",
+                    ),
+                    "shipping_cost_incl_tax": serializers.DecimalField(
+                        max_digits=10,
+                        decimal_places=2,
+                        help_text="Shipping cost including tax (USD)",
+                    ),
+                    "currency": serializers.CharField(),
+                },
+            ),
+            400: OpenApiResponse(
+                description="No physical books in cart, missing fields, or invalid country_code"
+            ),
             502: OpenApiResponse(description="Lulu API unavailable"),
         },
         summary="Estimate shipping cost",
@@ -222,7 +266,9 @@ class CartViewSet(viewsets.ViewSet):
 
         if not country_code or len(country_code) != 2:
             return Response(
-                {"error": "country_code must be a 2-letter ISO code (e.g. 'US', 'GB')."},
+                {
+                    "error": "country_code must be a 2-letter ISO code (e.g. 'US', 'GB')."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not city:
@@ -233,7 +279,8 @@ class CartViewSet(viewsets.ViewSet):
 
         cart = Cart.objects.filter(user=request.user).first()
         physical_items = [
-            i for i in (cart.items.select_related("book").all() if cart else [])
+            i
+            for i in (cart.items.select_related("book").all() if cart else [])
             if i.item_type == CartItem.ItemType.PHYSICAL_BOOK
         ]
 
@@ -244,7 +291,8 @@ class CartViewSet(viewsets.ViewSet):
             )
 
         missing = [
-            i.book.title for i in physical_items
+            i.book.title
+            for i in physical_items
             if not i.book.page_count or not i.book.lulu_pod_package_id
         ]
         if missing:
@@ -266,6 +314,7 @@ class CartViewSet(viewsets.ViewSet):
         ]
 
         import requests as req_lib
+
         try:
             result = calculate_shipping_cost(
                 line_items=lulu_line_items,
@@ -293,19 +342,27 @@ class CartViewSet(viewsets.ViewSet):
                         else:
                             messages.append(str(detail))
                     return Response(
-                        {"error": " | ".join(messages) if messages else "Invalid address for Lulu shipping."},
+                        {
+                            "error": " | ".join(messages)
+                            if messages
+                            else "Invalid address for Lulu shipping."
+                        },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 except Exception:
                     pass
             return Response(
-                {"error": "Could not retrieve shipping estimate from Lulu. Please try again."},
+                {
+                    "error": "Could not retrieve shipping estimate from Lulu. Please try again."
+                },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         except Exception as exc:
             logger.error("Lulu shipping estimate failed: %s", exc, exc_info=True)
             return Response(
-                {"error": "Could not retrieve shipping estimate from Lulu. Please try again."},
+                {
+                    "error": "Could not retrieve shipping estimate from Lulu. Please try again."
+                },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -336,19 +393,24 @@ class CartViewSet(viewsets.ViewSet):
 
         coupon, error = _resolve_coupon(code)
         if error:
-            return Response({"valid": False, "error": error}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"valid": False, "error": error}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         from decimal import Decimal
+
         discount = coupon.calculate_discount(total)
         discounted_total = max(Decimal("0"), Decimal(str(total)) - discount)
-        return Response({
-            "valid": True,
-            "code": coupon.code,
-            "discount_type": coupon.discount_type,
-            "discount_value": str(coupon.discount_value),
-            "discount_amount": str(discount),
-            "discounted_total": str(discounted_total),
-        })
+        return Response(
+            {
+                "valid": True,
+                "code": coupon.code,
+                "discount_type": coupon.discount_type,
+                "discount_value": str(coupon.discount_value),
+                "discount_amount": str(discount),
+                "discounted_total": str(discounted_total),
+            }
+        )
 
 
 class OrderViewSet(viewsets.ViewSet):
@@ -394,17 +456,26 @@ class OrderViewSet(viewsets.ViewSet):
         request=UpdateFulfillmentSerializer,
         responses={200: OrderSerializer},
     )
-    @action(detail=True, methods=["patch"], url_path="fulfillment", permission_classes=[IsAdminRole])
+    @action(
+        detail=True,
+        methods=["patch"],
+        url_path="fulfillment",
+        permission_classes=[IsAdminRole],
+    )
     def update_fulfillment(self, request, pk=None):
         """PATCH /orders/{id}/fulfillment/ — admin updates delivery status."""
         try:
             order = Order.objects.get(id=pk)
         except Order.DoesNotExist:
-            return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         if order.fulfillment_status == Order.FulfillmentStatus.NOT_APPLICABLE:
             return Response(
-                {"error": "This order has no physical items requiring fulfillment tracking."},
+                {
+                    "error": "This order has no physical items requiring fulfillment tracking."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -437,6 +508,7 @@ class OrderViewSet(viewsets.ViewSet):
             return Response({"error": coupon_error}, status=status.HTTP_400_BAD_REQUEST)
 
         from decimal import Decimal
+
         discount_amount = coupon.calculate_discount(price) if coupon else Decimal("0")
         final_price = max(Decimal("0"), Decimal(str(price)) - discount_amount)
 
@@ -475,14 +547,18 @@ class OrderViewSet(viewsets.ViewSet):
 
         # Create Stripe Checkout Session
         session = create_checkout_session(
-            line_items=[{
-                "price_data": {
-                    "currency": settings.CURRENCY,
-                    "unit_amount": int(final_price * 100),
-                    "product_data": {"name": obj.name if item_type == "bundle" else obj.title},
-                },
-                "quantity": 1,
-            }],
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": settings.CURRENCY,
+                        "unit_amount": int(final_price * 100),
+                        "product_data": {
+                            "name": obj.name if item_type == "bundle" else obj.title
+                        },
+                    },
+                    "quantity": 1,
+                }
+            ],
             success_url=f"{settings.FRONTEND_URL}/order-complete?order_id={order.id}",
             cancel_url=f"{settings.FRONTEND_URL}/checkout?cancelled=true",
             metadata={"order_id": order.id, "user_id": request.user.id},
@@ -504,7 +580,9 @@ class OrderViewSet(viewsets.ViewSet):
         request=CartCheckoutSerializer,
         responses={
             201: OrderSerializer,
-            400: OpenApiResponse(description="Cart empty, missing shipping_address, or insufficient stock"),
+            400: OpenApiResponse(
+                description="Cart empty, missing shipping_address, or insufficient stock"
+            ),
         },
         summary="Checkout cart",
         description=(
@@ -533,11 +611,15 @@ class OrderViewSet(viewsets.ViewSet):
             )
 
         items = list(cart.items.select_related("course", "bundle", "book").all())
-        has_physical = any(i.item_type == CartItem.ItemType.PHYSICAL_BOOK for i in items)
+        has_physical = any(
+            i.item_type == CartItem.ItemType.PHYSICAL_BOOK for i in items
+        )
 
         if has_physical and not serializer.validated_data.get("shipping_address"):
             return Response(
-                {"error": "shipping_address is required for orders containing physical books."},
+                {
+                    "error": "shipping_address is required for orders containing physical books."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -554,10 +636,13 @@ class OrderViewSet(viewsets.ViewSet):
 
         # Calculate Lulu shipping cost for physical books
         from decimal import Decimal
+
         shipping_cost = Decimal("0")
         shipping_level = serializer.validated_data.get("shipping_level", "MAIL")
         if has_physical:
-            physical_items = [i for i in items if i.item_type == CartItem.ItemType.PHYSICAL_BOOK]
+            physical_items = [
+                i for i in items if i.item_type == CartItem.ItemType.PHYSICAL_BOOK
+            ]
             lulu_line_items = [
                 {
                     "pod_package_id": i.book.lulu_pod_package_id,
@@ -579,9 +664,13 @@ class OrderViewSet(viewsets.ViewSet):
                         phone_number=addr.get("phone", ""),
                         shipping_level=shipping_level,
                     )
-                    shipping_cost = Decimal(str(
-                        cost_result.get("shipping_cost", {}).get("total_cost_excl_tax", 0)
-                    ))
+                    shipping_cost = Decimal(
+                        str(
+                            cost_result.get("shipping_cost", {}).get(
+                                "total_cost_excl_tax", 0
+                            )
+                        )
+                    )
                 except Exception as exc:
                     logger.warning("Lulu shipping cost fetch failed: %s", exc)
                     # Non-blocking — proceed without shipping cost if Lulu is unavailable
@@ -624,7 +713,12 @@ class OrderViewSet(viewsets.ViewSet):
             total_price = item.get_total_price()
             course = item.course if item.item_type == CartItem.ItemType.COURSE else None
             bundle = item.bundle if item.item_type == CartItem.ItemType.BUNDLE else None
-            book = item.book if item.item_type in (CartItem.ItemType.DIGITAL_BOOK, CartItem.ItemType.PHYSICAL_BOOK) else None
+            book = (
+                item.book
+                if item.item_type
+                in (CartItem.ItemType.DIGITAL_BOOK, CartItem.ItemType.PHYSICAL_BOOK)
+                else None
+            )
 
             OrderItem.objects.create(
                 order=order,
@@ -636,36 +730,44 @@ class OrderViewSet(viewsets.ViewSet):
                 unit_price=unit_price,
                 total_price=total_price,
             )
-            stripe_line_items.append({
-                "price_data": {
-                    "currency": settings.CURRENCY,
-                    "unit_amount": int(unit_price * 100),
-                    "product_data": {"name": item.get_display_name()},
-                },
-                "quantity": item.quantity,
-            })
+            stripe_line_items.append(
+                {
+                    "price_data": {
+                        "currency": settings.CURRENCY,
+                        "unit_amount": int(unit_price * 100),
+                        "product_data": {"name": item.get_display_name()},
+                    },
+                    "quantity": item.quantity,
+                }
+            )
 
         # Add shipping as a separate Stripe line item
         if shipping_cost > 0:
-            stripe_line_items.append({
-                "price_data": {
-                    "currency": settings.CURRENCY,
-                    "unit_amount": int(shipping_cost * 100),
-                    "product_data": {"name": f"Shipping ({shipping_level.replace('_', ' ').title()})"},
-                },
-                "quantity": 1,
-            })
+            stripe_line_items.append(
+                {
+                    "price_data": {
+                        "currency": settings.CURRENCY,
+                        "unit_amount": int(shipping_cost * 100),
+                        "product_data": {
+                            "name": f"Shipping ({shipping_level.replace('_', ' ').title()})"
+                        },
+                    },
+                    "quantity": 1,
+                }
+            )
 
         # Add coupon discount as a negative line item so Stripe total matches
         if discount_amount > 0:
-            stripe_line_items.append({
-                "price_data": {
-                    "currency": settings.CURRENCY,
-                    "unit_amount": -int(discount_amount * 100),
-                    "product_data": {"name": f"Discount ({coupon.code})"},
-                },
-                "quantity": 1,
-            })
+            stripe_line_items.append(
+                {
+                    "price_data": {
+                        "currency": settings.CURRENCY,
+                        "unit_amount": -int(discount_amount * 100),
+                        "product_data": {"name": f"Discount ({coupon.code})"},
+                    },
+                    "quantity": 1,
+                }
+            )
 
         # Free cart — skip Stripe
         if final_total == 0:
@@ -734,7 +836,9 @@ class StripeWebhookView(APIView):
             try:
                 self._handle_checkout_session_expired(event["data"]["object"])
             except Exception as e:
-                logger.error(f"Webhook checkout session expired error: {e}", exc_info=True)
+                logger.error(
+                    f"Webhook checkout session expired error: {e}", exc_info=True
+                )
         elif event["type"] == "payment_intent.payment_failed":
             try:
                 self._handle_payment_failed(event["data"]["object"])
@@ -780,9 +884,10 @@ class StripeWebhookView(APIView):
             donation_id = metadata.get("donation_id")
             if donation_id:
                 from donations.models import Donation
-                Donation.objects.filter(id=donation_id, status=Donation.Status.PENDING).update(
-                    status=Donation.Status.COMPLETED
-                )
+
+                Donation.objects.filter(
+                    id=donation_id, status=Donation.Status.PENDING
+                ).update(status=Donation.Status.COMPLETED)
             return
 
         if purchase_type == "consultation":
@@ -812,6 +917,7 @@ class StripeWebhookView(APIView):
             membership_id = metadata.get("membership_id")
             if membership_id:
                 from memberships.models import UserMembership
+
                 UserMembership.objects.filter(id=membership_id).update(
                     status=UserMembership.Status.FAILED
                 )
@@ -821,16 +927,20 @@ class StripeWebhookView(APIView):
             donation_id = metadata.get("donation_id")
             if donation_id:
                 from donations.models import Donation
-                Donation.objects.filter(id=donation_id, status=Donation.Status.PENDING).update(
-                    status=Donation.Status.FAILED
-                )
+
+                Donation.objects.filter(
+                    id=donation_id, status=Donation.Status.PENDING
+                ).update(status=Donation.Status.FAILED)
             return
 
         if purchase_type == "consultation":
             purchase_id = metadata.get("consultation_purchase_id")
             if purchase_id:
                 from consultations.models import ConsultationPurchase
-                ConsultationPurchase.objects.filter(id=purchase_id, status="pending").update(status="failed")
+
+                ConsultationPurchase.objects.filter(
+                    id=purchase_id, status="pending"
+                ).update(status="failed")
             return
 
         order_id = metadata.get("order_id")
@@ -853,12 +963,18 @@ class StripeWebhookView(APIView):
             purchase_id = metadata.get("consultation_purchase_id")
             if purchase_id:
                 from consultations.models import ConsultationPurchase
-                ConsultationPurchase.objects.filter(id=purchase_id).update(status="failed")
+
+                ConsultationPurchase.objects.filter(id=purchase_id).update(
+                    status="failed"
+                )
         elif purchase_type == "membership":
             membership_id = metadata.get("membership_id")
             if membership_id:
                 from memberships.models import UserMembership
-                UserMembership.objects.filter(id=membership_id).update(status=UserMembership.Status.FAILED)
+
+                UserMembership.objects.filter(id=membership_id).update(
+                    status=UserMembership.Status.FAILED
+                )
         else:
             order_id = metadata.get("order_id")
             if not order_id:
@@ -877,9 +993,11 @@ class StripeWebhookView(APIView):
         if not purchase_id:
             return
         try:
-            purchase = ConsultationPurchase.objects.select_related(
-                "student", "consultation"
-            ).prefetch_related("booked_slots").get(id=purchase_id)
+            purchase = (
+                ConsultationPurchase.objects.select_related("student", "consultation")
+                .prefetch_related("booked_slots")
+                .get(id=purchase_id)
+            )
         except ConsultationPurchase.DoesNotExist:
             return
 
@@ -933,7 +1051,9 @@ class StripeWebhookView(APIView):
         if not membership_id:
             return
         try:
-            membership = UserMembership.objects.select_related("user", "plan").get(id=membership_id)
+            membership = UserMembership.objects.select_related("user", "plan").get(
+                id=membership_id
+            )
         except UserMembership.DoesNotExist:
             return
 
@@ -942,7 +1062,9 @@ class StripeWebhookView(APIView):
         membership.status = UserMembership.Status.ACTIVE
         membership.start_date = now
         membership.end_date = now + timedelta(days=duration)
-        membership.save(update_fields=["status", "start_date", "end_date", "updated_at"])
+        membership.save(
+            update_fields=["status", "start_date", "end_date", "updated_at"]
+        )
 
         send_email_task.delay(
             to_email=membership.user.email,
@@ -961,6 +1083,7 @@ class StripeWebhookView(APIView):
 
     def _fulfill_donation(self, metadata):
         from donations.models import Donation
+
         donation_id = metadata.get("donation_id")
         if not donation_id:
             return
@@ -968,8 +1091,6 @@ class StripeWebhookView(APIView):
 
     def _fulfill_order(self, order):
         fulfill_order(order)
-
-
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -1004,15 +1125,24 @@ class LuluWebhookView(APIView):
                 lulu_status = lulu_status.get("name", "")
 
             if not print_job_id or not lulu_status:
-                return Response({"error": "Missing id or status."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "Missing id or status."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             our_status = self.STATUS_MAP.get(lulu_status.upper())
             if not our_status:
                 return Response({"status": "ignored"})
 
-            item = OrderItem.objects.filter(lulu_print_job_id=print_job_id).select_related("order__user", "book").first()
+            item = (
+                OrderItem.objects.filter(lulu_print_job_id=print_job_id)
+                .select_related("order__user", "book")
+                .first()
+            )
             if not item:
-                logger.warning("LuluWebhook: no OrderItem found for print_job_id=%s", print_job_id)
+                logger.warning(
+                    "LuluWebhook: no OrderItem found for print_job_id=%s", print_job_id
+                )
                 return Response({"status": "ok"})
 
             order = item.order
@@ -1033,7 +1163,10 @@ class LuluWebhookView(APIView):
 
         except Exception as e:
             logger.error("LuluWebhook error: %s", e, exc_info=True)
-            return Response({"error": "Internal error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": "Internal error."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     def _alert_admin(self, data, item, lulu_status):
         from django.conf import settings as django_settings
@@ -1041,7 +1174,9 @@ class LuluWebhookView(APIView):
 
         admin_email = django_settings.ADMIN_EMAIL
         if not admin_email:
-            logger.warning("LuluWebhook: ADMIN_EMAIL not set, skipping rejection alert.")
+            logger.warning(
+                "LuluWebhook: ADMIN_EMAIL not set, skipping rejection alert."
+            )
             return
 
         order = item.order
@@ -1053,7 +1188,11 @@ class LuluWebhookView(APIView):
             if normalization:
                 rejection_details.append(str(normalization))
 
-        reason = "\n".join(rejection_details) if rejection_details else "No details provided by Lulu."
+        reason = (
+            "\n".join(rejection_details)
+            if rejection_details
+            else "No details provided by Lulu."
+        )
 
         subject = f"⚠️ Lulu Print Job {lulu_status} — Order #{order.id}"
         body = (
@@ -1212,7 +1351,8 @@ class SalesViewSet(viewsets.ViewSet):
             "type": item.item_type,
             "product_name": product_name,
             "student_email": order.user.email,
-            "student_name": f"{order.user.first_name} {order.user.last_name}".strip() or order.user.email,
+            "student_name": f"{order.user.first_name} {order.user.last_name}".strip()
+            or order.user.email,
             "quantity": item.quantity,
             "amount": str(item.total_price),
             "payment_status": order.status,
@@ -1227,7 +1367,8 @@ class SalesViewSet(viewsets.ViewSet):
             "type": "consultation",
             "product_name": cp.consultation.title,
             "student_email": cp.student.email,
-            "student_name": f"{cp.student.first_name} {cp.student.last_name}".strip() or cp.student.email,
+            "student_name": f"{cp.student.first_name} {cp.student.last_name}".strip()
+            or cp.student.email,
             "quantity": cp.sessions_purchased,
             "amount": str(cp.total_price_paid),
             "payment_status": cp.status,
@@ -1259,7 +1400,8 @@ class SalesViewSet(viewsets.ViewSet):
             "type": "membership",
             "product_name": plan_name,
             "student_email": um.user.email,
-            "student_name": f"{um.user.first_name} {um.user.last_name}".strip() or um.user.email,
+            "student_name": f"{um.user.first_name} {um.user.last_name}".strip()
+            or um.user.email,
             "quantity": 1,
             "amount": amount,
             "payment_status": um.status,
@@ -1277,7 +1419,15 @@ class SalesViewSet(viewsets.ViewSet):
                 fields={
                     "id": serializers.CharField(),
                     "type": serializers.ChoiceField(
-                        choices=["course", "bundle", "digital_book", "physical_book", "consultation", "donation", "membership"]
+                        choices=[
+                            "course",
+                            "bundle",
+                            "digital_book",
+                            "physical_book",
+                            "consultation",
+                            "donation",
+                            "membership",
+                        ]
                     ),
                     "product_name": serializers.CharField(),
                     "student_email": serializers.EmailField(),
@@ -1319,13 +1469,20 @@ class SalesViewSet(viewsets.ViewSet):
         results = []
 
         # --- OrderItems (course, bundle, digital_book, physical_book) ---
-        if not sale_type or sale_type in ("course", "bundle", "digital_book", "physical_book"):
-            oi_qs = (
-                OrderItem.objects.select_related(
-                    "order", "order__user", "order__shipping_address", "course", "bundle", "book"
-                )
-                .order_by("-order__created_at")
-            )
+        if not sale_type or sale_type in (
+            "course",
+            "bundle",
+            "digital_book",
+            "physical_book",
+        ):
+            oi_qs = OrderItem.objects.select_related(
+                "order",
+                "order__user",
+                "order__shipping_address",
+                "course",
+                "bundle",
+                "book",
+            ).order_by("-order__created_at")
             if sale_type:
                 oi_qs = oi_qs.filter(item_type=sale_type)
             if payment_status:
@@ -1347,10 +1504,9 @@ class SalesViewSet(viewsets.ViewSet):
 
         # --- ConsultationPurchases ---
         if not sale_type or sale_type == "consultation":
-            cp_qs = (
-                ConsultationPurchase.objects.select_related("student", "consultation")
-                .order_by("-created_at")
-            )
+            cp_qs = ConsultationPurchase.objects.select_related(
+                "student", "consultation"
+            ).order_by("-created_at")
             if payment_status:
                 cp_qs = cp_qs.filter(status=payment_status)
             if date_from:
@@ -1385,9 +1541,8 @@ class SalesViewSet(viewsets.ViewSet):
 
         # --- UserMemberships ---
         if not sale_type or sale_type == "membership":
-            mem_qs = (
-                UserMembership.objects.select_related("user", "plan")
-                .order_by("-created_at")
+            mem_qs = UserMembership.objects.select_related("user", "plan").order_by(
+                "-created_at"
             )
             if payment_status:
                 mem_qs = mem_qs.filter(status=payment_status)
@@ -1422,10 +1577,18 @@ class SalesViewSet(viewsets.ViewSet):
 
         # Order items
         oi_base = OrderItem.objects.filter(order__status="completed")
-        course_stats = oi_base.filter(item_type="course").aggregate(count=Count("id"), revenue=Sum("total_price"))
-        bundle_stats = oi_base.filter(item_type="bundle").aggregate(count=Count("id"), revenue=Sum("total_price"))
-        digital_stats = oi_base.filter(item_type="digital_book").aggregate(count=Count("id"), revenue=Sum("total_price"))
-        physical_stats = oi_base.filter(item_type="physical_book").aggregate(count=Count("id"), revenue=Sum("total_price"))
+        course_stats = oi_base.filter(item_type="course").aggregate(
+            count=Count("id"), revenue=Sum("total_price")
+        )
+        bundle_stats = oi_base.filter(item_type="bundle").aggregate(
+            count=Count("id"), revenue=Sum("total_price")
+        )
+        digital_stats = oi_base.filter(item_type="digital_book").aggregate(
+            count=Count("id"), revenue=Sum("total_price")
+        )
+        physical_stats = oi_base.filter(item_type="physical_book").aggregate(
+            count=Count("id"), revenue=Sum("total_price")
+        )
 
         # Consultations
         cp_stats = ConsultationPurchase.objects.filter(status="completed").aggregate(
@@ -1438,9 +1601,9 @@ class SalesViewSet(viewsets.ViewSet):
         )
 
         # Memberships (active = paid)
-        mem_stats = UserMembership.objects.filter(status__in=["active", "expired"]).aggregate(
-            count=Count("id"), revenue=Sum("plan__price")
-        )
+        mem_stats = UserMembership.objects.filter(
+            status__in=["active", "expired"]
+        ).aggregate(count=Count("id"), revenue=Sum("plan__price"))
 
         def _fmt(stats, rev_key="revenue"):
             return {
@@ -1474,8 +1637,26 @@ class SalesViewSet(viewsets.ViewSet):
         )
 
 
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name="search",
+            description="Case-insensitive search for coupon code",
+            required=False,
+            type=str,
+            location=OpenApiParameter.QUERY,
+        ),
+    ]
+)
 class CouponViewSet(viewsets.ModelViewSet):
     """Admin CRUD for coupons. GET list/detail is admin-only."""
+
     serializer_class = CouponSerializer
-    queryset = Coupon.objects.all().order_by("-created_at")
     permission_classes = [IsAdminRole]
+
+    def get_queryset(self):
+        qs = Coupon.objects.all().order_by("-created_at")
+        search = self.request.query_params.get("search")
+        if search:
+            qs = qs.filter(code__icontains=search)
+        return qs
