@@ -514,6 +514,7 @@ class CourseCategoryViewSet(viewsets.ModelViewSet):
 
 class ModuleViewSet(viewsets.ModelViewSet):
     serializer_class = ModuleSerializer
+    pagination_class = None  # Disable pagination for modules
 
     def get_queryset(self):
         queryset = Module.objects.select_related("course").order_by("order").all()
