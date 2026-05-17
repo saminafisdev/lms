@@ -2,11 +2,11 @@
 import bleach
 
 # Recommended: allow most safe tags/attrs for admin blog content
-ALLOWED_TAGS = bleach.sanitizer.ALLOWED_TAGS + [
+ALLOWED_TAGS = set(bleach.sanitizer.ALLOWED_TAGS).union({
     'p', 'span', 'div', 'img', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
     'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'pre', 'code',
     'blockquote', 'ul', 'ol', 'li', 'br', 'hr', 'sup', 'sub', 'u', 's', 'mark', 'small', 'b', 'i', 'strong', 'em'
-]
+})
 ALLOWED_ATTRIBUTES = {
     '*': ['style', 'class', 'id', 'title'],
     'a': ['href', 'title', 'target', 'rel'],
