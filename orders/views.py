@@ -69,6 +69,20 @@ class CartViewSet(viewsets.ViewSet):
     """Unified cart — supports courses, bundles, digital books, and physical books."""
 
     permission_classes = [permissions.IsAuthenticated]
+    UNAUTHENTICATED_ACTIONS = ["validate_coupon"]
+
+    def get_permissions(self):
+        if self.action in self.UNAUTHENTICATED_ACTIONS:
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
+
+    def get_authenticators(self):
+        try:
+            if self.action in self.UNAUTHENTICATED_ACTIONS:
+                return []
+        except AttributeError:
+            pass
+        return super().get_authenticators()
 
     def get_or_create_cart(self, user):
         cart, _ = Cart.objects.get_or_create(user=user)
@@ -383,8 +397,17 @@ class CartViewSet(viewsets.ViewSet):
         summary="Validate a coupon code",
         description="Check if a coupon is valid and preview the discount amount and discounted total.",
     )
-    @action(detail=False, methods=["post"], url_path="validate-coupon")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="validate-coupon",
+        permission_classes=[permissions.AllowAny],
+        authentication_classes=[],
+    )
     def validate_coupon(self, request):
+        # Ensure public access regardless of ViewSet defaults
+        self.permission_classes = [permissions.AllowAny]
+        self.authentication_classes = []
         """POST /cart/validate-coupon/ — validate a coupon and preview the discount."""
         serializer = CouponValidateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
