@@ -19,11 +19,13 @@ ALLOWED_STYLES = [
     'width', 'height', 'border', 'border-collapse', 'padding', 'margin', 'text-align',
     'vertical-align', 'float', 'display', 'max-width', 'min-width', 'max-height', 'min-height',
 ]
+from bleach.css_sanitizer import CSSSanitizer
+_css_sanitizer = CSSSanitizer(allowed_css_properties=ALLOWED_STYLES)
 def sanitize_html(value):
     return bleach.clean(
         value,
         tags=ALLOWED_TAGS,
         attributes=ALLOWED_ATTRIBUTES,
-        styles=ALLOWED_STYLES,
+        css_sanitizer=_css_sanitizer,
         strip=True
     )
