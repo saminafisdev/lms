@@ -10,7 +10,7 @@ from .utils import already_owns
 class CouponSerializer(serializers.ModelSerializer):
     class Meta:
         model = Coupon
-        fields = ["id", "code", "discount_type", "discount_value", "is_active", "expires_at", "created_at"]
+        fields = ["id", "code", "discount_type", "discount_value", "min_purchase_amount", "is_active", "expires_at", "created_at"]
         read_only_fields = ["id", "created_at"]
 
 

@@ -60,8 +60,14 @@ def _resolve_coupon(coupon_code: str):
         coupon = Coupon.objects.get(code__iexact=coupon_code.strip())
     except Coupon.DoesNotExist:
         return None, "Invalid coupon code."
-    if not coupon.is_valid():
-        return None, "This coupon is expired or inactive."
+    # If total is available in context, pass it for min_purchase_amount check
+    import inspect
+    frame = inspect.currentframe().f_back
+    total = frame.f_locals.get('total')
+    if not coupon.is_valid(total=total):
+        if total is not None and hasattr(coupon, 'min_purchase_amount') and total < coupon.min_purchase_amount:
+            return None, f"Minimum purchase amount for this coupon is {coupon.min_purchase_amount}."
+        return None, "This coupon is expired, inactive, or does not meet minimum purchase amount."
     return coupon, None
 
 

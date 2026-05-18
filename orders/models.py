@@ -15,6 +15,7 @@ class Coupon(models.Model):
     code = models.CharField(max_length=50, unique=True)
     discount_type = models.CharField(max_length=10, choices=DiscountType.choices)
     discount_value = models.DecimalField(max_digits=10, decimal_places=2)
+    min_purchase_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Minimum order total required to use this coupon.")
     is_active = models.BooleanField(default=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -22,10 +23,12 @@ class Coupon(models.Model):
     def __str__(self):
         return f"{self.code} ({self.discount_type}: {self.discount_value})"
 
-    def is_valid(self):
+    def is_valid(self, total=None):
         if not self.is_active:
             return False
         if self.expires_at and self.expires_at < timezone.now():
+            return False
+        if total is not None and Decimal(str(total)) < self.min_purchase_amount:
             return False
         return True
 
