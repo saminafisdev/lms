@@ -14,10 +14,6 @@ def create_payment_intent(amount, currency=None, metadata=None):
         amount=int(amount * 100),  # convert to cents
         currency=currency or settings.CURRENCY,
         metadata=metadata or {},
-        automatic_payment_methods={
-            "enabled": True,
-            "allow_redirects": "never",
-        },
     )
 
 
@@ -34,7 +30,6 @@ def create_checkout_session(line_items, success_url, cancel_url, metadata=None):
         success_url=success_url,
         cancel_url=cancel_url,
         metadata=metadata or {},
-        automatic_payment_methods={"enabled": True},
     )
 
 
