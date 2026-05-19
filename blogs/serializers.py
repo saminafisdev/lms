@@ -24,7 +24,7 @@ class BlogAuthorSerializer(serializers.Serializer):
 
     def get_full_name(self, obj):
         if getattr(obj.user, "role", None) == "admin":
-            return "Admin"
+            return "Sakeena Institute"
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.email
 
 
