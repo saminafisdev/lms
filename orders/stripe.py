@@ -29,12 +29,12 @@ def create_checkout_session(line_items, success_url, cancel_url, metadata=None):
     line_items: list of dicts with price_data or price + quantity.
     """
     return stripe.checkout.Session.create(
-        payment_method_types=["card"],
         line_items=line_items,
         mode="payment",
         success_url=success_url,
         cancel_url=cancel_url,
         metadata=metadata or {},
+        automatic_payment_methods={"enabled": True},
     )
 
 
