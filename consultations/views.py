@@ -1,10 +1,23 @@
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Sum
 import logging
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer, OpenApiParameter, OpenApiResponse
+from drf_spectacular.utils import (
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+    OpenApiParameter,
+    OpenApiResponse,
+)
 from drf_spectacular.types import OpenApiTypes
-from rest_framework import permissions, serializers as drf_serializers, status, viewsets, filters
+from rest_framework import (
+    permissions,
+    serializers as drf_serializers,
+    status,
+    viewsets,
+    filters,
+)
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -13,7 +26,14 @@ logger = logging.getLogger(__name__)
 from config.permissions import IsAdminRole, IsTeacherRole
 from orders.stripe import create_checkout_session
 
-from .models import AvailableTimeslot, Bundle, Consultation, ConsultationPurchase, RecurringAvailability, RescheduleRequest
+from .models import (
+    AvailableTimeslot,
+    Bundle,
+    Consultation,
+    ConsultationPurchase,
+    RecurringAvailability,
+    RescheduleRequest,
+)
 from .serializers import (
     AvailableTimeslotSerializer,
     ConsultationBookSerializer,
@@ -34,8 +54,16 @@ class ConsultationViewSet(viewsets.ModelViewSet):
     )
     serializer_class = ConsultationSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = {"teacher": ["exact"], "teacher__user__email": ["icontains", "exact"]}
-    search_fields = ["teacher__user__first_name", "teacher__user__last_name", "teacher__user__email", "title"]
+    filterset_fields = {
+        "teacher": ["exact"],
+        "teacher__user__email": ["icontains", "exact"],
+    }
+    search_fields = [
+        "teacher__user__first_name",
+        "teacher__user__last_name",
+        "teacher__user__email",
+        "title",
+    ]
 
     def get_serializer_class(self):
         if self.action == "book":
@@ -54,7 +82,11 @@ class ConsultationViewSet(viewsets.ModelViewSet):
     @extend_schema(
         request=inline_serializer(
             name="ConsultationBookRequest",
-            fields={"timeslot_ids": drf_serializers.ListField(child=drf_serializers.IntegerField())},
+            fields={
+                "timeslot_ids": drf_serializers.ListField(
+                    child=drf_serializers.IntegerField()
+                )
+            },
         ),
         responses={201: ConsultationPurchaseSerializer},
     )
@@ -69,7 +101,9 @@ class ConsultationViewSet(viewsets.ModelViewSet):
 
         if not consultation.standard_price or consultation.standard_price <= 0:
             return Response(
-                {"error": "This consultation has no price set. Please contact an admin."},
+                {
+                    "error": "This consultation has no price set. Please contact an admin."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -79,14 +113,15 @@ class ConsultationViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             # Lock the timeslots to prevent race conditions
-            timeslots = (
-                AvailableTimeslot.objects.select_for_update()
-                .filter(id__in=timeslot_ids, consultation=consultation, is_booked=False)
+            timeslots = AvailableTimeslot.objects.select_for_update().filter(
+                id__in=timeslot_ids, consultation=consultation, is_booked=False
             )
 
             if timeslots.count() != len(timeslot_ids):
                 return Response(
-                    {"error": "One or more timeslots are unavailable or already booked."},
+                    {
+                        "error": "One or more timeslots are unavailable or already booked."
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -160,7 +195,12 @@ class ConsultationViewSet(viewsets.ModelViewSet):
             )
         ]
     )
-    @action(detail=True, methods=["get"], url_path="calendar", permission_classes=[permissions.AllowAny])
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="calendar",
+        permission_classes=[permissions.AllowAny],
+    )
     def calendar(self, request, pk=None):
         """
         GET /consultations/{id}/calendar/?month=2026-04
@@ -187,15 +227,11 @@ class ConsultationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        slots = (
-            AvailableTimeslot.objects
-            .filter(
-                consultation=consultation,
-                scheduled_start__year=year,
-                scheduled_start__month=month,
-            )
-            .order_by("scheduled_start")
-        )
+        slots = AvailableTimeslot.objects.filter(
+            consultation=consultation,
+            scheduled_start__year=year,
+            scheduled_start__month=month,
+        ).order_by("scheduled_start")
 
         calendar_data = {}
         for slot in slots:
@@ -208,7 +244,9 @@ class ConsultationViewSet(viewsets.ModelViewSet):
 
         for day_data in calendar_data.values():
             day_data["status"] = (
-                "fully_booked" if day_data["booked"] == day_data["total"] else "available"
+                "fully_booked"
+                if day_data["booked"] == day_data["total"]
+                else "available"
             )
             del day_data["booked"]
             del day_data["total"]
@@ -221,6 +259,7 @@ class RecurringAvailabilityViewSet(viewsets.ModelViewSet):
     Admin-only. Manage recurring availability rules for a consultation.
     Creating/updating a rule auto-generates AvailableTimeslot rows for 8 weeks.
     """
+
     serializer_class = RecurringAvailabilitySerializer
     permission_classes = [IsAdminRole]
 
@@ -240,6 +279,7 @@ class RecurringAvailabilityViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         rule = serializer.save()
         from django.utils import timezone
+
         AvailableTimeslot.objects.filter(
             recurring_rule=rule,
             is_booked=False,
@@ -259,18 +299,22 @@ class RecurringAvailabilityViewSet(viewsets.ModelViewSet):
         current = start_date
         while current <= end_date:
             if current.weekday() == rule.weekday:
-                slot_start = timezone.make_aware(datetime.combine(current, rule.start_time))
+                slot_start = timezone.make_aware(
+                    datetime.combine(current, rule.start_time)
+                )
                 slot_end = timezone.make_aware(datetime.combine(current, rule.end_time))
                 if not AvailableTimeslot.objects.filter(
                     consultation=rule.consultation,
                     scheduled_start=slot_start,
                 ).exists():
-                    slots_to_create.append(AvailableTimeslot(
-                        consultation=rule.consultation,
-                        scheduled_start=slot_start,
-                        scheduled_end=slot_end,
-                        recurring_rule=rule,
-                    ))
+                    slots_to_create.append(
+                        AvailableTimeslot(
+                            consultation=rule.consultation,
+                            scheduled_start=slot_start,
+                            scheduled_end=slot_end,
+                            recurring_rule=rule,
+                        )
+                    )
             current += timedelta(days=1)
 
         AvailableTimeslot.objects.bulk_create(slots_to_create)
@@ -362,12 +406,18 @@ class ConsultationPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.is_staff or getattr(user, "role", None) == "admin":
-            return ConsultationPurchase.objects.select_related(
-                "student", "consultation", "bundle_applied"
-            ).prefetch_related("booked_slots").all()
-        return ConsultationPurchase.objects.filter(student=user).select_related(
-            "consultation", "bundle_applied"
-        ).prefetch_related("booked_slots")
+            return (
+                ConsultationPurchase.objects.select_related(
+                    "student", "consultation", "bundle_applied"
+                )
+                .prefetch_related("booked_slots")
+                .all()
+            )
+        return (
+            ConsultationPurchase.objects.filter(student=user)
+            .select_related("consultation", "bundle_applied")
+            .prefetch_related("booked_slots")
+        )
 
     @extend_schema(
         summary="Request a reschedule",
@@ -391,29 +441,46 @@ class ConsultationPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
             201: RescheduleRequestSerializer,
             400: OpenApiResponse(
                 description="Validation error (missing fields, slot not part of purchase, slot unavailable, or duplicate pending request).",
-                response=inline_serializer("RequestRescheduleError400", fields={"error": drf_serializers.CharField()}),
+                response=inline_serializer(
+                    "RequestRescheduleError400",
+                    fields={"error": drf_serializers.CharField()},
+                ),
             ),
         },
         tags=["Consultations"],
     )
-    @action(detail=True, methods=["post"], url_path="request-reschedule", permission_classes=[permissions.IsAuthenticated])
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="request-reschedule",
+        permission_classes=[permissions.IsAuthenticated],
+    )
     def request_reschedule(self, request, pk=None):
         purchase = self.get_object()
 
         if purchase.student != request.user:
-            return Response({"error": "You can only request reschedules for your own purchases."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"error": "You can only request reschedules for your own purchases."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         old_slot_id = request.data.get("old_slot_id")
         new_slot_id = request.data.get("new_slot_id")
         reason = request.data.get("reason", "")
 
         if not old_slot_id or not new_slot_id:
-            return Response({"error": "Both old_slot_id and new_slot_id are required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Both old_slot_id and new_slot_id are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             old_slot = purchase.booked_slots.get(id=old_slot_id)
         except AvailableTimeslot.DoesNotExist:
-            return Response({"error": "old_slot_id is not part of this purchase."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "old_slot_id is not part of this purchase."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             new_slot = AvailableTimeslot.objects.get(
@@ -422,10 +489,22 @@ class ConsultationPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
                 is_booked=False,
             )
         except AvailableTimeslot.DoesNotExist:
-            return Response({"error": "new_slot_id is unavailable or does not belong to the same consultation."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "error": "new_slot_id is unavailable or does not belong to the same consultation."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        if RescheduleRequest.objects.filter(old_slot=old_slot, status=RescheduleRequest.STATUS_PENDING).exists():
-            return Response({"error": "A pending reschedule request for this slot already exists. Cancel it before submitting a new one."}, status=status.HTTP_400_BAD_REQUEST)
+        if RescheduleRequest.objects.filter(
+            old_slot=old_slot, status=RescheduleRequest.STATUS_PENDING
+        ).exists():
+            return Response(
+                {
+                    "error": "A pending reschedule request for this slot already exists. Cancel it before submitting a new one."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         rr = RescheduleRequest.objects.create(
             purchase=purchase,
@@ -433,7 +512,9 @@ class ConsultationPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
             requested_slot=new_slot,
             reason=reason,
         )
-        return Response(RescheduleRequestSerializer(rr).data, status=status.HTTP_201_CREATED)
+        return Response(
+            RescheduleRequestSerializer(rr).data, status=status.HTTP_201_CREATED
+        )
 
 
 def _perform_slot_swap(purchase, old_slot, new_slot):
@@ -441,15 +522,25 @@ def _perform_slot_swap(purchase, old_slot, new_slot):
     if old_slot.zoom_meeting_id:
         try:
             from config.zoom import delete_meeting
+
             delete_meeting(old_slot.zoom_meeting_id)
         except Exception as e:
-            logger.warning(f"Failed to delete Zoom meeting {old_slot.zoom_meeting_id}: {e}")
+            logger.warning(
+                f"Failed to delete Zoom meeting {old_slot.zoom_meeting_id}: {e}"
+            )
 
     old_slot.is_booked = False
     old_slot.zoom_meeting_id = None
     old_slot.zoom_join_url = None
     old_slot.zoom_start_url = None
-    old_slot.save(update_fields=["is_booked", "zoom_meeting_id", "zoom_join_url", "zoom_start_url"])
+    old_slot.save(
+        update_fields=[
+            "is_booked",
+            "zoom_meeting_id",
+            "zoom_join_url",
+            "zoom_start_url",
+        ]
+    )
 
     new_slot.is_booked = True
     new_slot.save(update_fields=["is_booked"])
@@ -458,13 +549,18 @@ def _perform_slot_swap(purchase, old_slot, new_slot):
     purchase.booked_slots.add(new_slot)
 
     from config.tasks import create_zoom_meeting_for_slot_task
+
     student_name = purchase.student.get_full_name() or purchase.student.email
-    create_zoom_meeting_for_slot_task.delay(new_slot.id, purchase.consultation.title, student_name)
+    create_zoom_meeting_for_slot_task.delay(
+        new_slot.id, purchase.consultation.title, student_name
+    )
 
 
 @extend_schema_view(
     list=extend_schema(summary="List reschedule requests", tags=["Consultations"]),
-    retrieve=extend_schema(summary="Retrieve a reschedule request", tags=["Consultations"]),
+    retrieve=extend_schema(
+        summary="Retrieve a reschedule request", tags=["Consultations"]
+    ),
 )
 class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = RescheduleRequestSerializer
@@ -498,22 +594,37 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
             200: RescheduleRequestSerializer,
             400: OpenApiResponse(
                 description="Request is not pending.",
-                response=inline_serializer("CancelError400", fields={"error": drf_serializers.CharField()}),
+                response=inline_serializer(
+                    "CancelError400", fields={"error": drf_serializers.CharField()}
+                ),
             ),
             403: OpenApiResponse(
                 description="Not your request.",
-                response=inline_serializer("CancelError403", fields={"error": drf_serializers.CharField()}),
+                response=inline_serializer(
+                    "CancelError403", fields={"error": drf_serializers.CharField()}
+                ),
             ),
         },
         tags=["Consultations"],
     )
-    @action(detail=True, methods=["post"], url_path="cancel", permission_classes=[permissions.IsAuthenticated])
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="cancel",
+        permission_classes=[permissions.IsAuthenticated],
+    )
     def cancel(self, request, pk=None):
         rr = self.get_object()
         if rr.purchase.student != request.user:
-            return Response({"error": "You can only cancel your own reschedule requests."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"error": "You can only cancel your own reschedule requests."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if rr.status != RescheduleRequest.STATUS_PENDING:
-            return Response({"error": "Only pending requests can be cancelled."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Only pending requests can be cancelled."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         rr.status = RescheduleRequest.STATUS_CANCELLED
         rr.save(update_fields=["status", "updated_at"])
         return Response(RescheduleRequestSerializer(rr).data)
@@ -527,15 +638,17 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
             "- Sends the student an email notification.\n\n"
             "**Permissions:** Admin only.\n\n"
             "**400 cases:**\n"
-            "- `\"Only pending requests can be accepted.\"` — request is already accepted/declined/cancelled.\n"
-            "- `\"The requested slot is no longer available.\"` — another booking took the slot between the request and acceptance."
+            '- `"Only pending requests can be accepted."` — request is already accepted/declined/cancelled.\n'
+            '- `"The requested slot is no longer available."` — another booking took the slot between the request and acceptance.'
         ),
         request=None,
         responses={
             200: RescheduleRequestSerializer,
             400: OpenApiResponse(
                 description="Request is not pending, or the requested slot was booked by someone else.",
-                response=inline_serializer("AcceptError400", fields={"error": drf_serializers.CharField()}),
+                response=inline_serializer(
+                    "AcceptError400", fields={"error": drf_serializers.CharField()}
+                ),
             ),
         },
         tags=["Consultations"],
@@ -544,12 +657,18 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
     def accept(self, request, pk=None):
         rr = self.get_object()
         if rr.status != RescheduleRequest.STATUS_PENDING:
-            return Response({"error": "Only pending requests can be accepted."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Only pending requests can be accepted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Re-check the requested slot is still free
         new_slot = rr.requested_slot
         if new_slot.is_booked:
-            return Response({"error": "The requested slot is no longer available."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "The requested slot is no longer available."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         with transaction.atomic():
             _perform_slot_swap(rr.purchase, rr.old_slot, new_slot)
@@ -559,6 +678,7 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
         student = rr.purchase.student
         try:
             from email_templates.sendgrid import send_email
+
             send_email(
                 to_email=student.email,
                 purpose="consultation_reschedule_accepted",
@@ -569,7 +689,9 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 },
             )
         except Exception as e:
-            logger.warning(f"Failed to send reschedule accepted email to {student.email}: {e}")
+            logger.warning(
+                f"Failed to send reschedule accepted email to {student.email}: {e}"
+            )
 
         return Response(RescheduleRequestSerializer(rr).data)
 
@@ -585,7 +707,9 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
             200: RescheduleRequestSerializer,
             400: OpenApiResponse(
                 description="Request is not pending.",
-                response=inline_serializer("DeclineError400", fields={"error": drf_serializers.CharField()}),
+                response=inline_serializer(
+                    "DeclineError400", fields={"error": drf_serializers.CharField()}
+                ),
             ),
         },
         tags=["Consultations"],
@@ -594,7 +718,10 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
     def decline(self, request, pk=None):
         rr = self.get_object()
         if rr.status != RescheduleRequest.STATUS_PENDING:
-            return Response({"error": "Only pending requests can be declined."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Only pending requests can be declined."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         rr.status = RescheduleRequest.STATUS_DECLINED
         rr.save(update_fields=["status", "updated_at"])
@@ -602,6 +729,7 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
         student = rr.purchase.student
         try:
             from email_templates.sendgrid import send_email
+
             send_email(
                 to_email=student.email,
                 purpose="consultation_reschedule_declined",
@@ -611,10 +739,11 @@ class RescheduleRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 },
             )
         except Exception as e:
-            logger.warning(f"Failed to send reschedule declined email to {student.email}: {e}")
+            logger.warning(
+                f"Failed to send reschedule declined email to {student.email}: {e}"
+            )
 
         return Response(RescheduleRequestSerializer(rr).data)
-
 
 
 class TeacherConsultationViewSet(viewsets.ReadOnlyModelViewSet):
@@ -629,11 +758,56 @@ class TeacherConsultationViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         from django.utils import timezone
-        return (
-            AvailableTimeslot.objects.filter(
-                consultation__teacher__user=self.request.user,
-                is_booked=True,
-                scheduled_start__gte=timezone.now(),
+
+        return AvailableTimeslot.objects.filter(
+            consultation__teacher__user=self.request.user,
+            is_booked=True,
+            scheduled_start__gte=timezone.now(),
+        ).order_by("scheduled_start")
+
+    @extend_schema(
+        summary="Get current month's consultation earnings",
+        responses={
+            200: inline_serializer(
+                name="TeacherConsultationEarningsResponse",
+                fields={
+                    "month": drf_serializers.CharField(),
+                    "sessions": drf_serializers.IntegerField(),
+                    "consultation_rate": drf_serializers.FloatField(),
+                    "earnings": drf_serializers.FloatField(),
+                },
             )
-            .order_by("scheduled_start")
+        },
+    )
+    @action(detail=False, methods=["get"], url_path="consultation-earnings")
+    def consultation_earnings(self, request):
+        """
+        Returns the current month's consultation earnings for the authenticated teacher.
+        """
+        from django.utils import timezone
+
+        user = request.user
+        teacher_profile = getattr(user, "teacher_profile", None)
+        if not teacher_profile:
+            return Response({"error": "No teacher profile found."}, status=400)
+        now = timezone.now()
+        first_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        purchases = ConsultationPurchase.objects.filter(
+            consultation__teacher=teacher_profile,
+            status="completed",
+            created_at__gte=first_of_month,
+            created_at__lte=now,
+        )
+        total_sessions = (
+            purchases.aggregate(Sum("sessions_purchased"))["sessions_purchased__sum"]
+            or 0
+        )
+        earnings = float(teacher_profile.consultation_rate) * total_sessions
+        return Response(
+            {
+                "month": now.strftime("%Y-%m"),
+                "sessions": total_sessions,
+                "consultation_rate": float(teacher_profile.consultation_rate),
+                "earnings": earnings,
+            }
         )
